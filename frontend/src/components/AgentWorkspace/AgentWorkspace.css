@@ -241,6 +241,37 @@
   transition: border-color 0.4s ease;
 }
 
+/* MacBook Staggered Launch Spring Animation for Left and Right Panels */
+.wh-left-pane {
+  animation: macPaneLeft 0.68s cubic-bezier(0.16, 1, 0.3, 1) 0.04s both;
+}
+
+.wh-right-pane {
+  animation: macPaneRight 0.68s cubic-bezier(0.16, 1, 0.3, 1) 0.09s both;
+}
+
+@keyframes macPaneLeft {
+  0% {
+    opacity: 0;
+    transform: translateY(32px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes macPaneRight {
+  0% {
+    opacity: 0;
+    transform: translateY(32px) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 /* Draggable Splitter Slider between Chat and Live Web */
 .wh-splitter-slider {
   width: 14px;
@@ -974,4 +1005,15 @@
 @keyframes shimmerSweep {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
+}
+
+.wh-running-telemetry-banner.paused-banner {
+  border-color: rgba(239, 68, 68, 0.45);
+  background: rgba(239, 68, 68, 0.1);
+  box-shadow: 0 0 15px rgba(239, 68, 68, 0.2);
+}
+
+.wh-running-telemetry-banner.paused-banner .wh-telemetry-dot {
+  background: #ef4444;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.9);
 }

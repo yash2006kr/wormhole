@@ -256,8 +256,11 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
             // 3. State Change
             else if (data.type === "STATE_CHANGE") {
               if (data.state === "RUNNING") setAgentStatus("RUNNING");
-              else if (data.state === "PAUSED_FOR_HUMAN") setAgentStatus("PAUSED_FOR_HUMAN");
-              else if (data.state === "IDLE") {
+              else if (data.state === "PAUSED_FOR_HUMAN") {
+                setAgentStatus("PAUSED_FOR_HUMAN");
+                setActiveTelemetry("🛑 Operator Override: Execution paused safely");
+                setTimeout(() => setActiveTelemetry(null), 4000);
+              } else if (data.state === "IDLE") {
                 setAgentStatus("IDLE");
                 setActiveTelemetry(null); // Telemetry disappears after agent finishes
               }
@@ -309,8 +312,14 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
 
             // 8. Task Complete
             else if (data.type === "COMPLETE") {
-              setAgentStatus("SUCCESS");
-              setActiveTelemetry(null); // Disappears after completion
+              if (data.state === "PAUSED_FOR_HUMAN") {
+                setAgentStatus("PAUSED_FOR_HUMAN");
+                setActiveTelemetry("🛑 Agent halted safely by operator override");
+                setTimeout(() => setActiveTelemetry(null), 4000);
+              } else {
+                setAgentStatus("SUCCESS");
+                setActiveTelemetry(null); // Disappears after completion
+              }
             }
 
             // 9. SOS Emergency Alert
@@ -492,13 +501,33 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
 
   // Stop Agent
   const handleStopAgent = async () => {
+    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     try {
-      await fetch("/api/abort", { method: "POST" });
+      const res = await fetch("/api/abort", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.send(JSON.stringify({ type: "ABORT_TASK" }));
       }
       setAgentStatus("PAUSED_FOR_HUMAN");
-      setActiveTelemetry(null);
+
+      // Explicitly append telemetry & chat confirmation card
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Math.random().toString(),
+          sender: "agent",
+          text: "🛑 **AGENT STOPPED**: Autonomous execution halted immediately by manual user override. Browser session paused and safe for manual interaction.",
+          timestamp: now,
+          telemetry: data.telemetry || {
+            action: "EMERGENCY_STOP",
+            state: "PAUSED_FOR_HUMAN",
+            reason: "Manual stop triggered by user",
+            timestamp: now,
+          },
+        },
+      ]);
+      setActiveTelemetry("Agent halted safely by operator override");
+      setTimeout(() => setActiveTelemetry(null), 3500);
     } catch (e) {
       console.error("Stop agent error:", e);
     }
@@ -753,9 +782,9 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
               ))
             )}
 
-            {/* TEMPORARY RUNNING TELEMETRY BANNER (MATCHES IMAGE 3) */}
-            {activeTelemetry && agentStatus === "RUNNING" && (
-              <div className="wh-running-telemetry-banner">
+            {/* TEMPORARY RUNNING / STATUS TELEMETRY BANNER (MATCHES IMAGE 3) */}
+            {activeTelemetry && (
+              <div className={`wh-running-telemetry-banner ${agentStatus === "PAUSED_FOR_HUMAN" ? "paused-banner" : ""}`}>
                 <span className="wh-telemetry-dot" />
                 <span className="wh-shimmer-text">{activeTelemetry}</span>
               </div>

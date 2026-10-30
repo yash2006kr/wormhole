@@ -29,7 +29,7 @@
 
 /* ==========================================================================
    APP MAIN VIEWPORT & LAYER ORCHESTRATION
-   Keeps 3D Humanoid Robot permanently in background while cards fade in/out
+   Keeps 3D Humanoid Robot permanently in background while cards open from bottom
    ========================================================================== */
 
 .app-main-viewport {
@@ -58,36 +58,45 @@
   inset: 0;
   z-index: 10;
   pointer-events: none;
-  transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: opacity 0.38s cubic-bezier(0.16, 1, 0.3, 1), transform 0.38s cubic-bezier(0.16, 1, 0.3, 1), filter 0.38s ease;
 }
 
 .initial-hero-overlay > * {
   pointer-events: auto;
 }
 
-/* Smooth fade out of search bar on prompt submission */
+/* Smooth MacBook dock-in/out: Search bar sinks down towards bottom on submit */
 .initial-hero-overlay.search-bar-fade-out {
   opacity: 0;
-  transform: translateY(28px) scale(0.98);
+  transform: translateY(60px) scale(0.85);
+  filter: blur(8px);
   pointer-events: none;
 }
 
-/* Workspace Cockpit Layer: Translucent glass cards floating over 3D robot */
+/* Workspace Cockpit Layer: MacBook-style window open/spring from bottom Dock */
 .workspace-glass-layer {
   position: fixed;
   inset: 0;
   z-index: 15;
   pointer-events: auto;
-  animation: workspaceCardsFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: 50% 100%;
+  animation: macAppLaunch 0.72s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-@keyframes workspaceCardsFadeIn {
-  from {
+@keyframes macAppLaunch {
+  0% {
     opacity: 0;
-    transform: translateY(20px) scale(0.985);
+    transform: translateY(140px) scale(0.68);
+    filter: blur(14px);
   }
-  to {
+  65% {
+    opacity: 1;
+    transform: translateY(-8px) scale(1.015);
+    filter: blur(0px);
+  }
+  100% {
     opacity: 1;
     transform: translateY(0) scale(1);
+    filter: blur(0px);
   }
 }

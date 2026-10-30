@@ -151,6 +151,9 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
         {/* Outer Glow Backdrop */}
         <div className="ai-search-glow-backdrop" />
 
+        {/* Circulating Glowing Orbit Beam around Search Bar */}
+        <div className="ai-search-orbit-glow" />
+
         {/* Outer Gradient Frame */}
         <div className="ai-search-frame" />
 

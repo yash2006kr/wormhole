@@ -447,7 +447,16 @@ async def create_new_chat():
 async def abort_current_task_endpoint():
     print("\n[AGENT SERVER] Received Emergency Stop Command from User.")
     await agent_core.abort_current_task()
-    return JSONResponse({"status": "ABORTED", "message": "Autonomous agent halted immediately."})
+    return JSONResponse({
+        "status": "PAUSED_FOR_HUMAN",
+        "message": "Autonomous agent halted immediately by user command.",
+        "telemetry": {
+            "action": "EMERGENCY_STOP",
+            "state": "PAUSED_FOR_HUMAN",
+            "timestamp": time.strftime("%H:%M:%S"),
+            "reason": "Execution cancelled by operator."
+        }
+    })
 
 # ==============================================================================
 # EMBEDDED BROWSER ADDRESS BAR NAVIGATION

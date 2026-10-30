@@ -569,15 +569,34 @@ class AgentCore:
     async def abort_current_task(self):
         """Emergency stop: kills current execution loop immediately."""
         print("[AGENT CORE] Immediate emergency abort triggered.")
-        self.state = "IDLE"
+        self.state = "PAUSED_FOR_HUMAN"
         self.interrupt_event.clear()
         self.resume_event.set()
         if self.execution_task and not self.execution_task.done():
             self.execution_task.cancel()
+
+        stop_msg = "🛑 **AGENT STOPPED**: Autonomous execution halted immediately by manual user override. Browser session paused and safe for manual control."
+        timestamp = time.strftime("%H:%M:%S")
+        self.session_history.append({
+            "role": "agent",
+            "text": stop_msg,
+            "time": timestamp
+        })
+
+        await self.broadcast({
+            "type": "CHAT_RESPONSE",
+            "text": stop_msg,
+            "reason": "Emergency stop invoked by user."
+        })
         await self.broadcast({
             "type": "COMPLETE",
-            "reason": "Agent stopped by user command.",
-            "state": "IDLE"
+            "reason": "Autonomous agent halted by user command.",
+            "state": "PAUSED_FOR_HUMAN",
+            "has_chat_response": True
+        })
+        await self.broadcast({
+            "type": "STATE_CHANGE",
+            "state": "PAUSED_FOR_HUMAN"
         })
 
     async def direct_goto(self, url):
