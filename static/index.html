@@ -623,6 +623,39 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
           else if (msg.action === "switch_tab") detail = `Switching to tab: ${msg.target || ''} - ${msg.reason || ''}`;
           else if (msg.action === "close_tab") detail = `Closing tab: ${msg.target || ''}`;
           log(`➔ Action [${msg.action}]: ${detail}`, "success");
+        } else if (msg.type === "AMBIGUITY_DETECTED") {
+          removeThinkingIndicator();
+          updateAgentState("INTERRUPTED");
+          let optionsHtml = "";
+          if (msg.options && msg.options.length) {
+            optionsHtml = `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">` +
+              msg.options.map(opt => `<button onclick="submitChoice('${opt.replace(/'/g, "\\'")}')" style="background:rgba(121,232,243,0.15); border:1px solid var(--cyan); color:#fff; border-radius:8px; padding:6px 12px; font-size:11.5px; font-weight:600; cursor:pointer;">${opt}</button>`).join('') +
+              `</div>`;
+          }
+          appendChatMessage("agent", `${msg.question}${optionsHtml}`);
+          if (inputMode === "voice") {
+            speakText(msg.question);
+          }
+        } else if (msg.type === "SNEAKY_FEE_INTERCEPTED") {
+          removeThinkingIndicator();
+          updateAgentState("INTERRUPTED");
+          let actionsHtml = `
+            <div style="display:flex; gap:8px; margin-top:10px;">
+              <button onclick="submitChoice('Proceed and pay the extra fee')" style="background:rgba(255,95,126,0.2); border:1px solid #ff5f7e; color:#fff; border-radius:8px; padding:6px 12px; font-size:11px; font-weight:700; cursor:pointer;">Approve Extra Fee</button>
+              <button onclick="submitChoice('Abort payment immediately')" style="background:rgba(255,255,255,0.1); border:1px solid #666; color:#ddd; border-radius:8px; padding:6px 12px; font-size:11px; cursor:pointer;">Abort</button>
+            </div>
+          `;
+          appendChatMessage("agent", `${msg.message}${actionsHtml}`);
+          if (inputMode === "voice") {
+            speakText("Warning: An unapproved fee was quietly added by the website at checkout. Payment halted.");
+          }
+        } else if (msg.type === "CRASH_RECONCILED") {
+          removeThinkingIndicator();
+          updateAgentState("IDLE");
+          appendChatMessage("agent", msg.message);
+          if (inputMode === "voice") {
+            speakText("Crash recovery active. Idempotency sentinel verified order on backend. Zero duplicate charges made.");
+          }
         } else if (msg.type === "CHAT_RESPONSE" || msg.type === "AGENT_RESPONSE") {
           removeThinkingIndicator();
           log(`[AGENT ANSWER] Formulated response (${msg.text.length} chars)`, "success");
@@ -977,6 +1010,11 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
       try {
         await fetch("/api/chat/new", { method: "POST" });
       } catch(e) {}
+    }
+
+    function submitChoice(choiceText) {
+      document.getElementById("user-input").value = choiceText;
+      sendPrompt();
     }
 
     // =========================================================================

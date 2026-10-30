@@ -235,6 +235,93 @@ async def mock_verify_otp(req: Request):
         print(f"[MOCK AUTH] Failed verification: entered '{entered_otp}', expected '{expected_otp}'")
         return JSONResponse({"status": "INVALID", "message": "Code mismatch"}, status_code=400)
 
+# ==============================================================================
+# HACKATHON SURPRISE HURDLE: CRASH-AFTER-SUBMIT & ORDER RECONCILIATION MOCK API
+# ==============================================================================
+mock_orders_db = {
+    "ORD-9921": {
+        "order_id": "ORD-9921",
+        "route": "BLR -> DEL (Airavat Express)",
+        "amount": 4650.0,
+        "currency": "INR",
+        "status": "PENDING",
+        "paid_at": None,
+        "receipt_number": None
+    }
+}
+
+@app.post("/api/mock/process_payment")
+async def mock_process_payment(req: Request):
+    global mock_orders_db
+    try:
+        data = await req.json()
+    except Exception:
+        data = {}
+    order_id = data.get("order_id", "ORD-9921")
+    amount = float(data.get("amount", 4650.0))
+    simulate_crash = bool(data.get("simulate_crash", False))
+
+    receipt_no = f"REC-{random.randint(100000, 999999)}"
+    mock_orders_db[order_id] = {
+        "order_id": order_id,
+        "route": "BLR -> DEL (Airavat Express)",
+        "amount": amount,
+        "currency": "INR",
+        "status": "PAID",
+        "paid_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "receipt_number": receipt_no
+    }
+    print(f"[MOCK PAYMENT] Order {order_id} processed: PAID ₹{amount:,.0f} (Receipt: {receipt_no}). Crash simulated: {simulate_crash}")
+    return JSONResponse({
+        "status": "SETTLED",
+        "order_id": order_id,
+        "receipt_number": receipt_no,
+        "amount": amount,
+        "crash_simulated": simulate_crash
+    })
+
+@app.get("/api/mock/order_status")
+async def mock_get_order_status(order_id: str = "ORD-9921"):
+    order = mock_orders_db.get(order_id)
+    if order:
+        return JSONResponse({"status": "FOUND", "order": order})
+    return JSONResponse({"status": "NOT_FOUND", "message": f"Order {order_id} not found"}, status_code=404)
+
+@app.get("/mock/orders", response_class=HTMLResponse)
+async def serve_mock_orders():
+    order = mock_orders_db.get("ORD-9921", {})
+    status_color = "#4ade80" if order.get("status") == "PAID" else "#fb923c"
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>AirTravel Express - Order Ledger & Reconciliation</title>
+      <style>
+        body {{ background: #0b0e1b; color: #fff; font-family: -apple-system, sans-serif; padding: 40px; }}
+        .card {{ background: #13172c; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; max-width: 580px; margin: 0 auto; padding: 28px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }}
+        .badge {{ background: {status_color}; color: #000; padding: 4px 10px; border-radius: 12px; font-weight: bold; font-size: 12px; }}
+        .row {{ display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 14px; }}
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <h2 style="margin-top:0; color:#79e8f3;">Order Status & Reconciliation Ledger</h2>
+        <div class="row"><span>Order Reference</span><strong>{order.get('order_id', 'ORD-9921')}</strong></div>
+        <div class="row"><span>Status</span><span class="badge">{order.get('status', 'PENDING')}</span></div>
+        <div class="row"><span>Route</span><span>{order.get('route', 'BLR -> DEL')}</span></div>
+        <div class="row"><span>Amount Captured</span><strong>₹{order.get('amount', 4650.0):,.0f}</strong></div>
+        <div class="row"><span>Payment Timestamp</span><span>{order.get('paid_at', 'Pending')}</span></div>
+        <div class="row"><span>Bank Receipt No.</span><strong>{order.get('receipt_number', 'None')}</strong></div>
+        <p style="font-size: 12px; color: #8b92b2; margin-top: 20px; line-height: 1.4;">
+          🛡️ <strong>Idempotency Sentinel:</strong> In case of abrupt browser/client crashes, the agent queries this ledger before re-executing any payment to ensure zero duplicate charges.
+        </p>
+      </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html)
+
 @app.get("/proof/{filename}")
 async def serve_proof_image(filename: str):
     file_path = BASE_DIR / filename
