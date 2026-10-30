@@ -21,10 +21,16 @@ body:before{content:"";position:fixed;inset:-20%;pointer-events:none;background:
 .left-panel>#prompt-card:after{content:"";position:absolute;inset:-1px;border-radius:18px;pointer-events:none;background:radial-gradient(320px circle at var(--px,50%) var(--py,30%),rgba(129,116,255,.13),transparent 72%)}
 .card-title{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#a7aac4;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1}.btn-stop-sm{background:#ff829011;border:1px solid #ff829044;padding:5px 8px;border-radius:7px;color:#ff9aa4;font-size:10px;cursor:pointer}
 
-/* NEW CHAT BUTTON & SESSION FEED */
+/* PERMANENT TOP HEADER BAR WITH TEXT/VOICE SWITCH ALWAYS VISIBLE */
+.prompt-card-header{display:flex;justify-content:space-between;align-items:center;padding:0 0 8px;margin-bottom:8px;border-bottom:1px solid rgba(155,170,255,0.12);position:relative;z-index:2}
 .btn-new-chat{background:linear-gradient(135deg,rgba(121,232,243,0.15),rgba(163,140,255,0.18));border:1px solid rgba(121,232,243,0.45);color:var(--cyan);padding:4px 9px;border-radius:7px;font-size:10.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;transition:0.2s}
 .btn-new-chat:hover{background:linear-gradient(135deg,rgba(121,232,243,0.3),rgba(163,140,255,0.3));border-color:var(--cyan);color:#fff;box-shadow:0 0 10px rgba(121,232,243,0.25)}
-.chat-history-feed{max-height:210px;overflow-y:auto;display:flex;flex-direction:column;gap:7px;margin-bottom:8px;padding:8px 10px;background:rgba(9,11,22,0.75);border:1px solid rgba(155,170,255,0.18);border-radius:10px;position:relative;z-index:1;scroll-behavior:smooth}
+
+/* HERO CONTAINER (ROBOT/ORB) COLLAPSES WHEN CHAT ACTIVE */
+.hero-container{position:relative;margin:0;transition:all .3s ease}
+
+/* CONVERSATION FEED FILLS THE ROBOT SPACE ONCE PROMPTED */
+.chat-history-feed{height:220px;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:7px;margin-bottom:8px;padding:9px 11px;background:rgba(9,11,22,0.78);border:1px solid rgba(155,170,255,0.18);border-radius:12px;position:relative;z-index:1;scroll-behavior:smooth}
 .chat-history-feed::-webkit-scrollbar{width:4px}.chat-history-feed::-webkit-scrollbar-thumb{background:#2a2e4d;border-radius:2px}
 .chat-bubble{padding:6px 9px;border-radius:8px;font-size:11px;line-height:1.45;word-break:break-word}
 .chat-bubble.user{background:rgba(163,140,255,0.15);border:1px solid rgba(163,140,255,0.3);color:#ede9fe;align-self:flex-end;max-width:92%}
@@ -49,7 +55,7 @@ body:before{content:"";position:fixed;inset:-20%;pointer-events:none;background:
 @keyframes orb{to{transform:scale(1.15);filter:hue-rotate(18deg)}}
 
 .welcome-copy{text-align:center;margin-bottom:10px;position:relative;z-index:1}.welcome-copy h1{font-size:19px;letter-spacing:-.6px;margin:0 0 3px;font-weight:650}.welcome-copy h1 span{color:var(--cyan)}.welcome-copy p{font-size:11px;color:var(--muted);margin:0}
-.mode-tabs{display:flex;width:max-content;margin:0 auto 9px;padding:3px;border:1px solid var(--line);background:#090b17;border-radius:10px;position:relative;z-index:1}.mode-tab{border:0;border-radius:7px;background:transparent;color:var(--muted);padding:5px 13px;font-size:10.5px;cursor:pointer;font-weight:600}.mode-tab.active{background:#28243f;color:#ebe7ff;box-shadow:inset 0 0 0 1px #bba6ff28}
+.mode-tabs{display:flex;width:max-content;margin:0;padding:3px;border:1px solid var(--line);background:#090b17;border-radius:10px;position:relative;z-index:2}.mode-tab{border:0;border-radius:7px;background:transparent;color:var(--muted);padding:5px 13px;font-size:10.5px;cursor:pointer;font-weight:600}.mode-tab.active{background:#28243f;color:#ebe7ff;box-shadow:inset 0 0 0 1px #bba6ff28}
 .attached-files-container{display:flex;gap:6px;flex-wrap:wrap;position:relative;z-index:2;margin-bottom:6px}.file-chip{background:#171a2b;border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:10px;display:flex;align-items:center;gap:6px;color:#e4e3f1}.file-chip-thumb{width:18px;height:18px;border-radius:4px;object-fit:cover}.file-chip-name{max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-chip-size{color:var(--muted);font-size:9px}.file-chip-remove{color:#ff9aa4;cursor:pointer}
 .prompt-box{display:flex;gap:7px;background:#0b0e1a;border:1px solid #a89cf133;border-radius:12px;padding:5px;align-items:center;transition:.2s;position:relative;z-index:1}.prompt-box:focus-within,.prompt-box.drag-over{border-color:#83dce988;box-shadow:0 0 0 3px #83dce910}.btn-attach,.btn-mic{background:transparent;border:0;color:#a8aac4;width:32px;height:32px;border-radius:8px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center}.btn-attach:hover,.btn-mic:hover{background:#ffffff0b;color:#fff}
 input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;border:0;color:#fff;font-size:12px;outline:none;padding:6px 4px}.user-prompt-input::placeholder{color:#777b98}
@@ -100,44 +106,45 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
       <!-- COMMAND & ATTACHMENT CARD -->
       <div class="card" id="prompt-card" style="flex-shrink: 0;">
         
-        <!-- TOP HERO 1: ROBOT SCENE (TEXT MODE) -->
-        <div class="bot-scene" id="bot-scene" aria-label="Warmhole assistant robot">
-          <div class="bot-label">WARMHOLE · AGENT ONLINE</div>
-          <div class="bot">
-            <span class="bot-ear left"></span>
-            <span class="bot-ear right"></span>
-            <span class="bot-eye left"></span>
-            <span class="bot-eye right"></span>
+        <!-- CARD TOP HEADER: PERMANENT MODE TABS (LEFT) + NEW CHAT & STOP (RIGHT) - ALWAYS VISIBLE -->
+        <div class="prompt-card-header">
+          <div class="mode-tabs" role="tablist" aria-label="Input mode">
+            <button class="mode-tab active" id="text-mode-tab" onclick="setInputMode('text')" role="tab" aria-selected="true">✦ &nbsp;Text</button>
+            <button class="mode-tab" id="voice-mode-tab" onclick="setInputMode('voice')" role="tab" aria-selected="false">◖)) &nbsp;Voice</button>
           </div>
-        </div>
-
-        <!-- TOP HERO 2: CIRCLE ORB SCENE (VOICE MODE - REPLACES ROBOT AT THE EXACT SAME TOP POSITION) -->
-        <div class="voice-stage" id="voice-stage" aria-label="Warmhole voice assistant">
-          <div class="bot-label" id="voice-label">WARMHOLE · VOICE RADAR</div>
-          <div class="voice-orb" id="voice-orb" onclick="toggleMic()" title="Click circle to speak"></div>
-        </div>
-
-        <!-- WELCOME HEADING -->
-        <div class="welcome-copy">
-          <h1 id="welcome-h1">Where to, <span>captain?</span></h1>
-          <p id="welcome-p">Your agent is ready when you are.</p>
-        </div>
-
-        <!-- MODE TABS (TEXT VS VOICE) -->
-        <div class="mode-tabs" role="tablist" aria-label="Input mode">
-          <button class="mode-tab active" id="text-mode-tab" onclick="setInputMode('text')" role="tab" aria-selected="true">✦ &nbsp;Text</button>
-          <button class="mode-tab" id="voice-mode-tab" onclick="setInputMode('voice')" role="tab" aria-selected="false">◖)) &nbsp;Voice</button>
-        </div>
-
-        <div class="card-title">
-          <span>Give your agent a task</span>
           <div style="display: flex; gap: 6px; align-items: center;">
             <button class="btn-new-chat" onclick="createNewChat()" title="Start fresh conversation and reset memory"><span>+</span> New Chat</button>
             <button class="btn-stop-sm" onclick="abortAgent()" title="Emergency halt active task">🛑 Stop Agent</button>
           </div>
         </div>
 
-        <!-- CONVERSATION STREAM IN CURRENT SESSION -->
+        <!-- HERO CONTAINER: ROBOT SCENE / CIRCLE ORB + WELCOME TEXT (VISIBLE IN EMPTY STATE, FILLED BY CHAT ONCE PROMPTED) -->
+        <div class="hero-container" id="hero-container">
+          <!-- TOP HERO 1: ROBOT SCENE (TEXT MODE) -->
+          <div class="bot-scene" id="bot-scene" aria-label="Warmhole assistant robot">
+            <div class="bot-label">WARMHOLE · AGENT ONLINE</div>
+            <div class="bot">
+              <span class="bot-ear left"></span>
+              <span class="bot-ear right"></span>
+              <span class="bot-eye left"></span>
+              <span class="bot-eye right"></span>
+            </div>
+          </div>
+
+          <!-- TOP HERO 2: CIRCLE ORB SCENE (VOICE MODE - REPLACES ROBOT IN THE EXACT SAME SPOT) -->
+          <div class="voice-stage" id="voice-stage" aria-label="Warmhole voice assistant">
+            <div class="bot-label" id="voice-label">WARMHOLE · VOICE RADAR</div>
+            <div class="voice-orb" id="voice-orb" onclick="toggleMic()" title="Click circle to speak"></div>
+          </div>
+
+          <!-- WELCOME HEADING -->
+          <div class="welcome-copy" id="welcome-copy">
+            <h1 id="welcome-h1">Where to, <span>captain?</span></h1>
+            <p id="welcome-p">Your agent is ready when you are.</p>
+          </div>
+        </div>
+
+        <!-- CONVERSATION STREAM IN CURRENT SESSION (FILLS ROBOT SPACE ONCE PROMPT ENTERED) -->
         <div class="chat-history-feed" id="chat-history-feed" style="display: none;"></div>
 
         <!-- ATTACHED FILES CHIPS (PRESERVED UNTIL USER CLICKS NEW CHAT) -->
@@ -322,7 +329,7 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
     let audioContext, audioStream, levelFrame;
 
     // =========================================================================
-    // SWITCH BETWEEN TEXT & VOICE MODE (REPLACES ROBOT WITH CIRCLE ORB AT TOP)
+    // SWITCH BETWEEN TEXT & VOICE MODE (ALWAYS AVAILABLE AT TOP)
     // =========================================================================
     function setInputMode(mode) {
       inputMode = mode;
@@ -333,12 +340,26 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
       document.getElementById("text-mode-tab").setAttribute("aria-selected", !isVoice);
       document.getElementById("voice-mode-tab").setAttribute("aria-selected", isVoice);
 
-      // 1. TOP HERO AREA: REPLACE ROBOT SCENE WITH CIRCLE ORB
+      // 1. If hero container is still visible (before prompt), toggle robot vs circle orb
+      const hero = document.getElementById("hero-container");
       const botScene = document.getElementById("bot-scene");
       const voiceStage = document.getElementById("voice-stage");
-      if (botScene && voiceStage) {
-        botScene.style.display = isVoice ? "none" : "flex";
-        voiceStage.style.display = isVoice ? "flex" : "none";
+      if (hero && hero.style.display !== "none") {
+        if (botScene && voiceStage) {
+          botScene.style.display = isVoice ? "none" : "flex";
+          voiceStage.style.display = isVoice ? "flex" : "none";
+        }
+        const h1 = document.getElementById("welcome-h1");
+        const p = document.getElementById("welcome-p");
+        if (h1 && p) {
+          if (isVoice) {
+            h1.innerHTML = "Voice <span>Navigation</span>";
+            p.innerText = "Click the circle orb above or button to speak.";
+          } else {
+            h1.innerHTML = "Where to, <span>captain?</span>";
+            p.innerText = "Your agent is ready when you are.";
+          }
+        }
       }
 
       // 2. INPUT CONTROLS BELOW: TOGGLE TEXT BOX VS VOICE ACTION BAR
@@ -346,19 +367,6 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
       const voiceBar = document.getElementById("voice-action-bar");
       if (dropZone) dropZone.style.display = isVoice ? "none" : "flex";
       if (voiceBar) voiceBar.style.display = isVoice ? "flex" : "none";
-
-      // 3. DYNAMIC TITLE
-      const h1 = document.getElementById("welcome-h1");
-      const p = document.getElementById("welcome-p");
-      if (h1 && p) {
-        if (isVoice) {
-          h1.innerHTML = "Voice <span>Navigation</span>";
-          p.innerText = "Click the circle orb above or button to speak.";
-        } else {
-          h1.innerHTML = "Where to, <span>captain?</span>";
-          p.innerText = "Your agent is ready when you are.";
-        }
-      }
 
       if (!isVoice) {
         stopAudioMeter();
@@ -848,10 +856,17 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
       } catch(e) {}
     }
 
+    function showChatAndHideHero() {
+      const hero = document.getElementById("hero-container");
+      const feed = document.getElementById("chat-history-feed");
+      if (hero) hero.style.display = "none";
+      if (feed) feed.style.display = "flex";
+    }
+
     function appendChatMessage(role, text, fileList=[]) {
+      showChatAndHideHero();
       const feed = document.getElementById("chat-history-feed");
       if (!feed) return;
-      feed.style.display = "flex";
       const msgEl = document.createElement("div");
       msgEl.className = `chat-bubble ${role}`;
       const timeStr = new Date().toTimeString().split(' ')[0];
@@ -884,6 +899,15 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
       if (feed) {
         feed.innerHTML = "";
         feed.style.display = "none";
+      }
+      const hero = document.getElementById("hero-container");
+      if (hero) {
+        hero.style.display = "block";
+        const isVoice = (inputMode === "voice");
+        const botScene = document.getElementById("bot-scene");
+        const voiceStage = document.getElementById("voice-stage");
+        if (botScene) botScene.style.display = isVoice ? "none" : "flex";
+        if (voiceStage) voiceStage.style.display = isVoice ? "flex" : "none";
       }
       log("[NEW CHAT] Clean session initialized. All previous memory & attached files reset.", "warn");
       updateAgentState("IDLE");
