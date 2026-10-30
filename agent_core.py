@@ -187,10 +187,10 @@ class AgentCore:
         else:
             self.page = await self.context.new_page()
 
-        # Open default landing page if fresh
-        if not self.page.url or self.page.url in ["about:blank", "chrome://newtab/"]:
+        # Open default landing page if fresh (Default to Google search bar)
+        if not self.page.url or self.page.url in ["about:blank", "chrome://newtab/"] or "wikipedia" in (self.page.url or ""):
             try:
-                await self.page.goto("https://en.wikipedia.org", wait_until="domcontentloaded", timeout=15000)
+                await self.page.goto("https://www.google.com", wait_until="domcontentloaded", timeout=15000)
             except Exception:
                 pass
 
@@ -922,6 +922,39 @@ class AgentCore:
             "time": timestamp
         })
 
+        clean_goal = goal.strip().lower().rstrip("!.,?")
+        # Fast conversational greeting / pure chat handling (defaults browser to Google search bar)
+        if clean_goal in ["hi", "hello", "hey", "hola", "greetings", "good morning", "good evening", "how are you", "who are you", "what can you do", "help"]:
+            # Ensure live browser is docked on Google search bar
+            if self.page and (not self.page.url or self.page.url in ["about:blank", "chrome://newtab/"] or "wikipedia" in self.page.url):
+                try:
+                    await self.page.goto("https://www.google.com", wait_until="domcontentloaded", timeout=12000)
+                except Exception:
+                    pass
+
+            welcome_msg = (
+                "Hello! I am **Wormhole Copilot**, your real-time autonomous browser assistant.\n\n"
+                "I can navigate any public website, execute Google searches, bypass dark patterns, fill complex applications, and solve hurdles autonomously.\n\n"
+                "Tell me what you'd like to do or search, and I will handle it in the live browser beside us!"
+            )
+            self.session_history.append({
+                "role": "agent",
+                "text": welcome_msg,
+                "time": time.strftime("%H:%M:%S")
+            })
+            await self.broadcast({
+                "type": "CHAT_RESPONSE",
+                "text": welcome_msg,
+                "reason": "Direct conversational response with Google Search ready."
+            })
+            await self.broadcast({
+                "type": "COMPLETE",
+                "reason": "Greeting handled. Google Search ready for instructions.",
+                "has_chat_response": True
+            })
+            self.state = "IDLE"
+            return
+
         # Extract Voice Financial Anchor (e.g. "pay ₹4,650", "book for 4200", etc.)
         voice_amt, voice_curr = extract_voice_approved_amount(goal)
         if voice_amt:
@@ -1023,6 +1056,14 @@ class AgentCore:
                     await asyncio.sleep(1.5)
             except Exception as e:
                 print(f"[!] Portfolio navigation error: {e}")
+        elif self.page and (not self.page.url or self.page.url in ["about:blank", "chrome://newtab/"] or "wikipedia" in self.page.url):
+            # Default to Google Search Bar when prompt doesn't specify a website
+            try:
+                print("[AGENT CORE] No website specified in prompt. Defaulting live browser to Google Search Bar...")
+                await self.page.goto("https://www.google.com", wait_until="domcontentloaded", timeout=15000)
+                await asyncio.sleep(1.0)
+            except Exception as e:
+                print(f"[!] Default Google navigation error: {e}")
         
         if self.execution_task and not self.execution_task.done():
             self.execution_task.cancel()
@@ -1608,7 +1649,7 @@ class AgentCore:
         # Execute with dynamic multi-key failover and resilient backup models
         return api_pool.execute_chat_completion(
             messages=messages,
-            models=["openai/gpt-oss-120b", "llama-3.3-70b-versatile", "qwen/qwen3.8-27b", "openai/gpt-oss-20b", "llama-3.1-8b-instant"],
+            models=["qwen/qwen3.8-27b", "openai/gpt-oss-20b", "openai/gpt-oss-120b"],
             temperature=0.1,
             response_format={"type": "json_object"}
         )

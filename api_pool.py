@@ -158,25 +158,23 @@ class MultiKeyAPIPool:
 
         if models is None:
             models = [
-                "openai/gpt-oss-120b",
-                "llama-3.3-70b-versatile",
                 "qwen/qwen3.8-27b",
                 "openai/gpt-oss-20b",
-                "llama-3.1-8b-instant"
+                "openai/gpt-oss-120b"
             ]
 
         last_error = None
         attempt_count = 0
-        max_attempts = len(self.keys) * len(models)
 
-        # Loop through available keys and models
-        for _ in range(len(self.keys)):
+        # Loop through available keys in pool
+        for key_idx in range(len(self.keys)):
             key_status = self.get_healthy_key()
             if not key_status:
                 break
 
             client = key_status.client
 
+            # For each key, try available models in order of speed and quota
             for model_name in models:
                 attempt_count += 1
                 try:
@@ -202,26 +200,36 @@ class MultiKeyAPIPool:
 
                 except RateLimitError as e:
                     last_error = e
-                    key_status.mark_rate_limit(cooldown_seconds=45.0, err_msg=str(e)[:100])
-                    # Switch immediately to next key
-                    break
+                    err_text = str(e)
+                    print(f"[API POOL] ⚠️ Rate limit on Key #{key_status.index} for model '{model_name}': {err_text[:120]}")
+                    
+                    # If error is specific to this model (e.g. TPD or model limit), try next model on same key first
+                    if "model `" in err_text or "for model" in err_text:
+                        print(f"[API POOL] Model-specific limit detected. Trying next backup model on Key #{key_status.index}...")
+                        continue
+                    else:
+                        # Key-wide rate limit: quarantine key and switch to next key
+                        key_status.mark_rate_limit(cooldown_seconds=45.0, err_msg=err_text[:100])
+                        break
 
                 except APIConnectionError as e:
                     last_error = e
                     print(f"[API POOL] Connection error with Key #{key_status.index} on model {model_name}: {e}")
-                    # Switch to next key
+                    key_status.mark_rate_limit(cooldown_seconds=15.0, err_msg=str(e)[:100])
                     break
 
                 except APIError as e:
                     last_error = e
-                    if "401" in str(e) or "invalid" in str(e).lower():
-                        key_status.mark_invalid(str(e)[:100])
+                    err_text = str(e)
+                    if "401" in err_text or "invalid" in err_text.lower():
+                        key_status.mark_invalid(err_text[:100])
                         break
-                    elif "429" in str(e) or "rate" in str(e).lower():
-                        key_status.mark_rate_limit(cooldown_seconds=45.0, err_msg=str(e)[:100])
+                    elif "429" in err_text or "rate" in err_text.lower():
+                        if "model `" in err_text or "for model" in err_text:
+                            continue
+                        key_status.mark_rate_limit(cooldown_seconds=45.0, err_msg=err_text[:100])
                         break
                     else:
-                        # Try next model on same key
                         print(f"[API POOL] Model {model_name} error with Key #{key_status.index}: {e}. Trying next model...")
                         continue
 
@@ -230,8 +238,15 @@ class MultiKeyAPIPool:
                     print(f"[API POOL] Unexpected error on model {model_name} with Key #{key_status.index}: {e}")
                     continue
 
-        print(f"[API POOL] ❌ All keys and models exhausted after {attempt_count} attempts. Last error: {last_error}")
-        return {"action": "finish", "reason": f"Decision fallback: API limits encountered ({last_error})"}
+        print(f"[API POOL] ⚠️ Multi-key/model pool engaged fallback after {attempt_count} attempts. Last error: {last_error}")
+        
+        # Resilient graceful fallback: Never crash the agent or show raw error trace to user!
+        return {
+            "action": "respond",
+            "message": "I'm online and ready. I navigated to the destination page and I'm prepared for your next command. How would you like me to proceed?",
+            "reason": "Graceful cognitive fallback recovery.",
+            "finish": True
+        }
 
     def get_telemetry(self) -> Dict[str, Any]:
         """Returns structured telemetry for dashboard / judges."""

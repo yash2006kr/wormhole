@@ -219,9 +219,11 @@
 
 .wh-workbench {
   flex: 1;
+  height: 100vh;
+  max-height: 100vh;
   display: flex;
-  gap: 16px;
-  padding: 16px 20px 20px 20px;
+  gap: 0;
+  padding: 12px 14px;
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -239,7 +241,65 @@
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 25px var(--wh-accent-glow);
   backdrop-filter: blur(28px) saturate(180%);
   -webkit-backdrop-filter: blur(28px) saturate(180%);
-  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.4s ease;
+  border-color: var(--wh-border);
+  transition: border-color 0.4s ease;
+}
+
+/* Draggable Splitter Slider between Chat and Live Web */
+.wh-splitter-slider {
+  width: 14px;
+  margin: 0 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+  position: relative;
+  z-index: 20;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.wh-splitter-track {
+  position: absolute;
+  width: 1px;
+  top: 18px;
+  bottom: 18px;
+  background: rgba(255, 255, 255, 0.08);
+  transition: background 0.2s;
+}
+
+.wh-splitter-thumb {
+  width: 6px;
+  height: 44px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.18);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  z-index: 2;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
+}
+
+.wh-splitter-thumb span {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.wh-splitter-slider:hover .wh-splitter-thumb,
+.wh-splitter-slider.active-drag .wh-splitter-thumb {
+  background: var(--wh-accent);
+  height: 72px;
+  box-shadow: 0 0 16px var(--wh-accent-glow);
+}
+
+.wh-splitter-slider:hover .wh-splitter-track,
+.wh-splitter-slider.active-drag .wh-splitter-track {
+  background: var(--wh-accent);
 }
 
 /* Ethereal Edge Flares on Cards */
@@ -267,7 +327,7 @@
   pointer-events: none;
 }
 
-/* Width Layouts */
+/* Width Layouts (deprecated in favor of dynamic slider, kept for fallback) */
 .wh-workbench.layout-default .wh-left-pane { width: 44%; }
 .wh-workbench.layout-default .wh-right-pane { width: 56%; }
 
@@ -276,6 +336,41 @@
 
 .wh-workbench.layout-5050 .wh-left-pane { width: 50%; }
 .wh-workbench.layout-5050 .wh-right-pane { width: 50%; }
+
+/* Cockpit Header Live Indicator Pill */
+.wh-live-indicator-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--wh-border);
+}
+
+.wh-live-indicator-pill.live {
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.3);
+}
+
+.wh-live-indicator-pill.offline {
+  color: #94a3b8;
+}
+
+.wh-live-indicator-pill .wh-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.wh-live-indicator-pill.live .wh-live-dot {
+  box-shadow: 0 0 8px #34d399;
+  animation: liveDotPulse 1.8s infinite;
+}
 
 /* ==========================================================================
    LEFT PANE - COCKPIT HEADER
@@ -525,6 +620,100 @@
   flex-direction: column;
   gap: 8px;
   z-index: 2;
+}
+
+/* ==========================================================================
+   VOICE MODE PRESS TO SPEAK BAR (REPLACES TEXT SEARCH BAR IN VOICE MODE)
+   ========================================================================== */
+
+.wh-voice-press-container {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wh-voice-press-btn {
+  width: 100%;
+  border: 1px solid var(--wh-border);
+  background: var(--wh-card-inner);
+  border-radius: 28px;
+  padding: 12px 22px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), 0 0 12px var(--wh-accent-glow);
+  outline: none;
+}
+
+.wh-voice-press-btn:hover {
+  border-color: var(--wh-accent);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.4), 0 0 20px var(--wh-accent-glow);
+  transform: translateY(-1px);
+}
+
+.wh-voice-press-btn.recording {
+  border-color: var(--wh-accent);
+  background: rgba(0, 240, 255, 0.12);
+  box-shadow: 0 0 30px var(--wh-accent-glow), 0 0 10px var(--wh-accent);
+  animation: voiceRecordingPulse 1.6s ease-in-out infinite alternate;
+}
+
+@keyframes voiceRecordingPulse {
+  0% { box-shadow: 0 0 16px var(--wh-accent-glow); transform: scale(1); }
+  100% { box-shadow: 0 0 34px var(--wh-accent-glow); transform: scale(1.01); }
+}
+
+.wh-voice-press-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.wh-voice-press-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--wh-accent);
+  flex-shrink: 0;
+}
+
+.wh-voice-press-text {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+/* Dancing Audio Bars when recording */
+.wh-voice-press-bars {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.wh-voice-press-bars span {
+  width: 3px;
+  height: 100%;
+  background: var(--wh-accent);
+  border-radius: 2px;
+  animation: voicePressWave 0.8s ease-in-out infinite alternate;
+}
+
+.wh-voice-press-bars span:nth-child(1) { animation-delay: 0.0s; height: 35%; }
+.wh-voice-press-bars span:nth-child(2) { animation-delay: 0.2s; height: 85%; }
+.wh-voice-press-bars span:nth-child(3) { animation-delay: 0.4s; height: 100%; }
+.wh-voice-press-bars span:nth-child(4) { animation-delay: 0.1s; height: 65%; }
+.wh-voice-press-bars span:nth-child(5) { animation-delay: 0.3s; height: 40%; }
+
+@keyframes voicePressWave {
+  0% { transform: scaleY(0.3); opacity: 0.6; }
+  100% { transform: scaleY(1.0); opacity: 1; }
 }
 
 .wh-status-footer {

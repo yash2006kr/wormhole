@@ -33,7 +33,6 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
   onReset,
 }) => {
   const [currentTheme, setCurrentTheme] = useState<"purple" | "blue">(theme);
-  const [layout, setLayout] = useState<"default" | "wide" | "5050">("default");
   const [inputMode, setInputMode] = useState<"text" | "voice">(theme === "blue" ? "voice" : "text");
   const [agentStatus, setAgentStatus] = useState<"IDLE" | "RUNNING" | "PAUSED_FOR_HUMAN" | "SUCCESS" | "ERROR">("IDLE");
   const [wsConnected, setWsConnected] = useState(false);
@@ -48,6 +47,132 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
 
   // Temporary telemetry state: shown during execution with shimmer, disappears once agent replies
   const [activeTelemetry, setActiveTelemetry] = useState<string | null>(null);
+
+  // Draggable Splitter Slider State
+  const [splitPercent, setSplitPercent] = useState<number>(() => {
+    const saved = localStorage.getItem("wh_split_percent");
+    return saved ? parseFloat(saved) : 44;
+  });
+  const [isDragging, setIsDragging] = useState(false);
+  const workbenchRef = useRef<HTMLDivElement>(null);
+
+  // Dedicated Voice Mode Speech Recognition
+  const [isListeningVoice, setIsListeningVoice] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState("");
+  const voiceRecognitionRef = useRef<any>(null);
+  const voiceSilenceTimerRef = useRef<any>(null);
+
+  const handleSplitterMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging || !workbenchRef.current) return;
+      const rect = workbenchRef.current.getBoundingClientRect();
+      const offsetX = e.clientX - rect.left;
+      const totalWidth = rect.width;
+      const minPercent = 22;
+      const maxPercent = 75;
+      const pct = Math.min(maxPercent, Math.max(minPercent, (offsetX / totalWidth) * 100));
+      setSplitPercent(pct);
+    };
+
+    const handleMouseUp = () => {
+      if (isDragging) {
+        setIsDragging(false);
+        localStorage.setItem("wh_split_percent", splitPercent.toString());
+      }
+    };
+
+    if (isDragging) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    } else {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    }
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [isDragging, splitPercent]);
+
+  const toggleVoiceListen = () => {
+    if (isListeningVoice) {
+      if (voiceRecognitionRef.current) {
+        voiceRecognitionRef.current.stop();
+      }
+      setIsListeningVoice(false);
+      if (voiceTranscript.trim()) {
+        const textToSend = voiceTranscript.trim();
+        setVoiceTranscript("");
+        handleExecute(textToSend);
+      }
+      return;
+    }
+
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert("Speech recognition is not supported in this browser. Please use Google Chrome.");
+      return;
+    }
+
+    try {
+      const rec = new SpeechRecognition();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.lang = "en-US";
+
+      rec.onstart = () => {
+        setIsListeningVoice(true);
+        setVoiceTranscript("");
+      };
+
+      rec.onresult = (event: any) => {
+        let fullText = "";
+        for (let i = 0; i < event.results.length; i++) {
+          fullText += event.results[i][0].transcript;
+        }
+        if (fullText.trim()) {
+          setVoiceTranscript(fullText.trim());
+
+          // Auto-submit after 1.8s of silence
+          if (voiceSilenceTimerRef.current) clearTimeout(voiceSilenceTimerRef.current);
+          voiceSilenceTimerRef.current = setTimeout(() => {
+            rec.stop();
+            setIsListeningVoice(false);
+            const textToSend = fullText.trim();
+            setVoiceTranscript("");
+            handleExecute(textToSend);
+          }, 1800);
+        }
+      };
+
+      rec.onerror = (err: any) => {
+        console.warn("Voice error:", err);
+        setIsListeningVoice(false);
+      };
+
+      rec.onend = () => {
+        setIsListeningVoice(false);
+      };
+
+      voiceRecognitionRef.current = rec;
+      rec.start();
+    } catch (e) {
+      console.error("Speech init error:", e);
+      setIsListeningVoice(false);
+    }
+  };
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -508,73 +633,10 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
 
   return (
     <div className={`workspace-root theme-${currentTheme}`}>
-      {/* 1. TOP APP HEADER */}
-      <header className="wh-top-header">
-        <div className="wh-brand">
-          <div className="wh-logo-orb">W</div>
-          <span className="wh-brand-title">warmhole</span>
-          <span className="wh-brand-subtitle">your agentic workspace</span>
-        </div>
-
-        <div className="wh-top-controls">
-          {/* Theme switcher */}
-          <div className="wh-pills">
-            <button
-              className={`wh-pill-btn ${currentTheme === "purple" ? "active" : ""}`}
-              onClick={() => {
-                setCurrentTheme("purple");
-                setInputMode("text");
-              }}
-            >
-              Galaxy Purple
-            </button>
-            <button
-              className={`wh-pill-btn ${currentTheme === "blue" ? "active" : ""}`}
-              onClick={() => {
-                setCurrentTheme("blue");
-                setInputMode("voice");
-              }}
-            >
-              Electric Blue
-            </button>
-          </div>
-
-          {/* Layout switcher */}
-          <div className="wh-layout-group">
-            <span className="wh-layout-label">Workspace:</span>
-            <div className="wh-pills">
-              <button
-                className={`wh-pill-btn ${layout === "default" ? "active" : ""}`}
-                onClick={() => setLayout("default")}
-              >
-                Default
-              </button>
-              <button
-                className={`wh-pill-btn ${layout === "wide" ? "active" : ""}`}
-                onClick={() => setLayout("wide")}
-              >
-                Wide Browser
-              </button>
-              <button
-                className={`wh-pill-btn ${layout === "5050" ? "active" : ""}`}
-                onClick={() => setLayout("5050")}
-              >
-                50:50
-              </button>
-            </div>
-          </div>
-
-          <div className="wh-live-badge">
-            <span className="wh-live-dot" />
-            <span>{wsConnected ? "LIVE STREAM ACTIVE" : "STREAM OFFLINE"}</span>
-          </div>
-        </div>
-      </header>
-
-      {/* 2. MAIN WORKBENCH SPLIT PANE */}
-      <div className={`wh-workbench layout-${layout}`}>
+      {/* 1. MAIN WORKBENCH WITH DRAGGABLE SPLITTER (TOP BAR REMOVED) */}
+      <div className="wh-workbench" ref={workbenchRef}>
         {/* LEFT PANE: Chat, Intelligence & Telemetry */}
-        <section className="wh-left-pane">
+        <section className="wh-left-pane" style={{ width: `calc(${splitPercent}% - 6px)`, flex: "none" }}>
           {/* Top edge fade flare */}
           <div className="wh-card-flare-top" />
 
@@ -602,6 +664,10 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
             </div>
 
             <div className="wh-action-btns">
+              <div className={`wh-live-indicator-pill ${wsConnected ? "live" : "offline"}`}>
+                <span className="wh-live-dot" />
+                <span>{wsConnected ? "LIVE" : "OFFLINE"}</span>
+              </div>
               <button className="wh-btn-pill wh-btn-pill-cyan" onClick={handleNewChat} title="Start New Chat & Return to 3D Robot Hero">
                 + New Chat
               </button>
@@ -696,14 +762,54 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
             )}
           </div>
 
-          {/* BOTTOM DOCKED SEARCH BAR (EXACT SAME AS INITIAL HERO SEARCH BAR) */}
+          {/* BOTTOM DOCKED INPUT BAR: TEXT BAR OR PRESS-TO-SPEAK BAR */}
           <div className="wh-bottom-bar">
-            <AISearchBar
-              isDocked={true}
-              theme={currentTheme}
-              onAttachFile={handleFileUpload}
-              onSearch={handleExecute}
-            />
+            {inputMode === "text" ? (
+              <AISearchBar
+                isDocked={true}
+                theme={currentTheme}
+                onAttachFile={handleFileUpload}
+                onSearch={handleExecute}
+                onEnterVoiceMode={() => {
+                  setInputMode("voice");
+                  setCurrentTheme("blue");
+                }}
+              />
+            ) : (
+              <div className="wh-voice-press-container">
+                <button
+                  type="button"
+                  className={`wh-voice-press-btn ${isListeningVoice ? "recording" : ""}`}
+                  onClick={toggleVoiceListen}
+                  title={isListeningVoice ? "Tap to Finish & Send" : "Tap or Press to Speak"}
+                >
+                  <div className="wh-voice-press-inner">
+                    {isListeningVoice ? (
+                      <div className="wh-voice-press-bars">
+                        <span />
+                        <span />
+                        <span />
+                        <span />
+                        <span />
+                      </div>
+                    ) : (
+                      <svg className="wh-voice-press-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                        <line x1="12" y1="19" x2="12" y2="22" />
+                      </svg>
+                    )}
+                    <span className="wh-voice-press-text">
+                      {isListeningVoice
+                        ? voiceTranscript
+                          ? `"${voiceTranscript}"`
+                          : "Listening... Tap to send"
+                        : "Press to Speak"}
+                    </span>
+                  </div>
+                </button>
+              </div>
+            )}
 
             <div className="wh-status-footer">
               <div>
@@ -717,8 +823,22 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
           <div className="wh-card-flare-bottom" />
         </section>
 
+        {/* DRAGGABLE ADJUSTABLE SLIDER BETWEEN CHAT AND LIVE WEB */}
+        <div
+          className={`wh-splitter-slider ${isDragging ? "active-drag" : ""}`}
+          onMouseDown={handleSplitterMouseDown}
+          title="Drag left/right to adjust chat and live web sections"
+        >
+          <div className="wh-splitter-track" />
+          <div className="wh-splitter-thumb">
+            <span />
+            <span />
+            <span />
+          </div>
+        </div>
+
         {/* RIGHT PANE: Live Browser Viewport & Navigation Bar */}
-        <section className="wh-right-pane">
+        <section className="wh-right-pane" style={{ width: `calc(${100 - splitPercent}% - 6px)`, flex: "none" }}>
           {/* Top edge fade flare */}
           <div className="wh-card-flare-top" />
 
