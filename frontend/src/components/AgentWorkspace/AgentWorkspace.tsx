@@ -17,6 +17,7 @@ interface ChatMessage {
   emergency?: boolean;
   telemetry?: any;
   proofImage?: string;
+  options?: string[];
 }
 
 interface AgentWorkspaceProps {
@@ -270,6 +271,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
             else if (data.type === "CHAT_RESPONSE" && data.text) {
               setActiveTelemetry(null); // Telemetry disappears once agent replies!
               setAgentStatus("SUCCESS");
+              const chatOptions = Array.isArray(data.options) ? data.options : [];
               setMessages((prev) => {
                 const last = prev[prev.length - 1];
                 if (last && last.sender === "agent") {
@@ -278,6 +280,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                     {
                       ...last,
                       text: data.text,
+                      options: chatOptions.length > 0 ? chatOptions : last.options,
                     },
                   ];
                 }
@@ -288,6 +291,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                     sender: "agent",
                     text: data.text,
                     timestamp: now,
+                    options: chatOptions,
                   },
                 ];
               });
@@ -400,7 +404,17 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
         body: JSON.stringify({ prompt: textToSend }),
       });
 
-      const data = await res.json();
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => "");
+        throw new Error(errorText || `Server error status: ${res.status}`);
+      }
+
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch (jsonErr) {
+        data = { status: "ERROR", message: "Server response was not JSON" };
+      }
 
       // If protocol finished immediately (e.g. Doc Exorcist, Transit Rush, Dark Pattern, Fraud Sentinel)
       if (data.status === "COMPLETED") {
@@ -420,9 +434,20 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
           emergency: isEmergency,
           telemetry: data.details || data.telemetry,
           proofImage: data.proof_image,
+          options: data.options || [],
         };
 
         setMessages((prev) => [...prev, agentMsg]);
+      } else if (data.status === "ERROR") {
+        setActiveTelemetry(null);
+        setAgentStatus("ERROR");
+        const errMsg: ChatMessage = {
+          id: Math.random().toString(),
+          sender: "system",
+          text: data.message || data.reason || "Execution notice",
+          timestamp: timeStr,
+        };
+        setMessages((prev) => [...prev, errMsg]);
       } else if (data.status === "RUNNING") {
         setActiveTelemetry(`1 task running · ${data.reason || "Navigating browser..."}`);
       }
@@ -434,7 +459,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
       const errorMsg: ChatMessage = {
         id: Math.random().toString(),
         sender: "system",
-        text: `Execution failed: ${err.message || "Connection to backend failed"}`,
+        text: `Execution notice: ${err.message || "Connection to backend failed"}`,
         timestamp: timeStr,
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -776,6 +801,24 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                         alt="Proof"
                         style={{ maxWidth: "100%", borderRadius: "8px", border: "1px solid var(--wh-border)" }}
                       />
+                    </div>
+                  )}
+
+                  {/* INTERACTIVE CLICKABLE OPTIONS / PILLS */}
+                  {m.options && m.options.length > 0 && (
+                    <div className="wh-chat-options-container">
+                      {m.options.map((opt, optIdx) => (
+                        <button
+                          key={optIdx}
+                          type="button"
+                          className="wh-chat-option-btn"
+                          onClick={() => handleExecute(opt)}
+                          title={`Click to execute: ${opt}`}
+                        >
+                          <span className="wh-chat-option-sparkle">✦</span>
+                          <span className="wh-chat-option-label">{opt}</span>
+                        </button>
+                      ))}
                     </div>
                   )}
                 </div>

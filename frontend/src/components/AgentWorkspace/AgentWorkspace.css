@@ -1017,3 +1017,76 @@
   background: #ef4444;
   box-shadow: 0 0 10px rgba(239, 68, 68, 0.9);
 }
+
+
+/* ==============================================================================
+   INTERACTIVE QUICK ACTION OPTIONS / CHIPS IN CHAT
+   ============================================================================== */
+.wh-chat-options-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.wh-chat-option-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  border-radius: 9999px;
+  color: #e9d5ff;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  font-family: inherit;
+  user-select: none;
+}
+
+.wh-chat-option-btn:hover {
+  background: rgba(168, 85, 247, 0.22);
+  border-color: rgba(216, 180, 254, 0.75);
+  color: #ffffff;
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.45);
+}
+
+.wh-chat-option-btn:active {
+  transform: translateY(0) scale(0.97);
+}
+
+.wh-chat-option-sparkle {
+  color: #c084fc;
+  font-size: 11px;
+  animation: optionSparkle 2s infinite ease-in-out;
+}
+
+@keyframes optionSparkle {
+  0%, 100% { opacity: 0.6; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+/* Blue Theme Variant */
+.theme-blue .wh-chat-option-btn {
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #bae6fd;
+}
+
+.theme-blue .wh-chat-option-btn:hover {
+  background: rgba(56, 189, 248, 0.22);
+  border-color: rgba(186, 230, 253, 0.75);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(56, 189, 248, 0.45);
+}
+
+.theme-blue .wh-chat-option-sparkle {
+  color: #38bdf8;
+}

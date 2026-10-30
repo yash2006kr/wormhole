@@ -18,6 +18,7 @@ import base64
 import asyncio
 from pathlib import Path
 from urllib.parse import urlparse
+from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 
 if sys.platform.startswith('win'):
@@ -955,16 +956,24 @@ class AgentCore:
             welcome_msg = (
                 "Hello! I am **Wormhole Copilot**, your real-time autonomous browser assistant.\n\n"
                 "I can navigate any public website, execute Google searches, bypass dark patterns, fill complex applications, and solve hurdles autonomously.\n\n"
-                "Tell me what you'd like to do or search, and I will handle it in the live browser beside us!"
+                "Tell me what you'd like to do or search, or pick a quick action below to get started!"
             )
+            greeting_opts = [
+                "🔍 Search the Web",
+                "🎵 Open Suno AI",
+                "🚌 Book Bus on AbhiBus",
+                "⚡ Fix Passport Photo"
+            ]
             self.session_history.append({
                 "role": "agent",
                 "text": welcome_msg,
+                "options": greeting_opts,
                 "time": time.strftime("%H:%M:%S")
             })
             await self.broadcast({
                 "type": "CHAT_RESPONSE",
                 "text": welcome_msg,
+                "options": greeting_opts,
                 "reason": "Direct conversational response with Google Search ready."
             })
             await self.broadcast({
@@ -1046,7 +1055,15 @@ class AgentCore:
 
         # SMART DESTINATION & NAVIGATION RESOLVER
         target_initial_url = None
-        clean_g_lower = goal.lower()
+        clean_g_lower = goal.lower().strip()
+        curr_page_url = (self.page.url if self.page else "") or ""
+        curr_host = urlparse(curr_page_url).netloc.lower() if curr_page_url else ""
+        is_on_real_page = bool(
+            curr_page_url 
+            and curr_page_url != "about:blank" 
+            and not curr_page_url.startswith("http://localhost:8000")
+            and not curr_page_url.startswith("http://127.0.0.1:8000")
+        )
 
         # A. Direct explicit HTTP/HTTPS URL
         found_urls = re.findall(r'https?://[^\s<>"\',;]+', goal)
@@ -1058,33 +1075,52 @@ class AgentCore:
             m = re.search(r'\b([a-zA-Z0-9-]+\.(?:com|in|org|net|io|app|co|ai|me))\b', clean_g_lower)
             target_initial_url = f"https://www.{m.group(1)}"
 
-        # C. Known sites and popular brand keywords
-        elif "abhibus" in clean_g_lower:
-            target_initial_url = "https://www.abhibus.com"
-        elif "redbus" in clean_g_lower:
-            target_initial_url = "https://www.redbus.in"
-        elif any(k in clean_g_lower for k in ["suno", "suno ai", "suno.ai"]):
-            target_initial_url = "https://suno.com"
-        elif "youtube" in clean_g_lower:
-            target_initial_url = "https://www.youtube.com"
-        elif "amazon" in clean_g_lower:
-            target_initial_url = "https://www.amazon.in"
-        elif "flipkart" in clean_g_lower:
-            target_initial_url = "https://www.flipkart.com"
-        elif "swiggy" in clean_g_lower:
-            target_initial_url = "https://www.swiggy.com"
-        elif "zomato" in clean_g_lower:
-            target_initial_url = "https://www.zomato.com"
-        elif any(k in clean_g_lower for k in ["portfolio", "yash2006kr", "yashwanth"]):
-            target_initial_url = "https://yash2006kr.vercel.app/"
-        elif "wikipedia" in clean_g_lower:
-            target_initial_url = "https://www.wikipedia.org"
-
-        # D. "open <site>", "visit <site>", "launch <site>"
+        # C. Explicit site opening commands ("open abhibus", "go to youtube", "visit amazon")
         elif re.search(r'\b(?:open|visit|go to|launch)\s+([a-zA-Z0-9-]+)\b', clean_g_lower):
             site_cand = re.search(r'\b(?:open|visit|go to|launch)\s+([a-zA-Z0-9-]+)\b', clean_g_lower).group(1)
-            if site_cand not in ["the", "a", "an", "browser", "tab", "page", "window", "link", "google", "search"]:
-                target_initial_url = f"https://www.{site_cand}.com"
+            if site_cand not in ["the", "a", "an", "browser", "tab", "page", "window", "link", "google", "search", "create", "prompt", "song", "lyrics", "editor", "studio"]:
+                if site_cand == "abhibus":
+                    target_initial_url = "https://www.abhibus.com"
+                elif site_cand == "redbus":
+                    target_initial_url = "https://www.redbus.in"
+                elif site_cand in ["suno", "sunoai"]:
+                    target_initial_url = "https://suno.com"
+                elif site_cand == "youtube":
+                    target_initial_url = "https://www.youtube.com"
+                elif site_cand == "amazon":
+                    target_initial_url = "https://www.amazon.in"
+                elif site_cand == "flipkart":
+                    target_initial_url = "https://www.flipkart.com"
+                elif site_cand == "swiggy":
+                    target_initial_url = "https://www.swiggy.com"
+                elif site_cand == "zomato":
+                    target_initial_url = "https://www.zomato.com"
+                elif site_cand == "wikipedia":
+                    target_initial_url = "https://www.wikipedia.org"
+                else:
+                    target_initial_url = f"https://www.{site_cand}.com"
+
+        # D. Known sites and popular brand keywords IF NOT ALREADY ON THAT SITE
+        elif "abhibus" in clean_g_lower and "abhibus" not in curr_host:
+            target_initial_url = "https://www.abhibus.com"
+        elif "redbus" in clean_g_lower and "redbus" not in curr_host:
+            target_initial_url = "https://www.redbus.in"
+        elif any(k in clean_g_lower for k in ["suno ai", "suno.ai", "suno "]) and "suno" not in curr_host:
+            target_initial_url = "https://suno.com"
+        elif "youtube" in clean_g_lower and "youtube" not in curr_host:
+            target_initial_url = "https://www.youtube.com"
+        elif "amazon" in clean_g_lower and "amazon" not in curr_host:
+            target_initial_url = "https://www.amazon.in"
+        elif "flipkart" in clean_g_lower and "flipkart" not in curr_host:
+            target_initial_url = "https://www.flipkart.com"
+        elif "swiggy" in clean_g_lower and "swiggy" not in curr_host:
+            target_initial_url = "https://www.swiggy.com"
+        elif "zomato" in clean_g_lower and "zomato" not in curr_host:
+            target_initial_url = "https://www.zomato.com"
+        elif any(k in clean_g_lower for k in ["portfolio", "yash2006kr", "yashwanth"]) and "yash2006kr" not in curr_host:
+            target_initial_url = "https://yash2006kr.vercel.app/"
+        elif "wikipedia" in clean_g_lower and "wikipedia" not in curr_host:
+            target_initial_url = "https://www.wikipedia.org"
 
         # E. Explicit local benchmark routes
         elif any(k in clean_g_lower for k in ["mock ksrtc", "test transit rush", "demo ksrtc"]):
@@ -1094,7 +1130,15 @@ class AgentCore:
         elif any(k in clean_g_lower for k in ["mock emergency", "test emergency"]):
             target_initial_url = "http://localhost:8000/mock/emergency"
 
-        # F. Search & Exploration query (e.g. "best biryani in vijayanagar")
+        # F. IN-PAGE FOLLOW-UP ACTION CHECK:
+        # If user is already on a real web page (like suno.com, abhibus.com, etc.),
+        # DO NOT navigate away to Google Search for in-page actions like:
+        # "create", "click create", "enter prompt", "make song about...", "play", "filter", etc.
+        elif is_on_real_page:
+            target_initial_url = None
+            print(f"[AGENT CORE] User is on active site '{curr_page_url}'. Preserving session context for follow-up: '{goal}'")
+
+        # G. General Search & Exploration query from blank/initial state
         else:
             search_q = goal.strip()
             for pfx in ["search for", "search", "google", "find", "look up", "tell me about", "who is", "what is"]:
@@ -1527,20 +1571,23 @@ class AgentCore:
 
                     elif action_type in ["respond", "answer", "reply"]:
                         msg_text = action.get("message") or action.get("text") or action.get("response") or reason
-                        print(f"  -> Agent Answering User in Chat:\n{msg_text}\n")
+                        opts = action.get("options") or self._generate_context_options(curr_url, self.current_goal, msg_text)
+                        print(f"  -> Agent Answering User in Chat:\n{msg_text}\n  -> Clickable Options: {opts}\n")
                         
                         # Record response in session memory
                         timestamp = time.strftime("%H:%M:%S")
                         self.session_history.append({
                             "role": "agent",
                             "text": msg_text,
+                            "options": opts,
                             "time": timestamp
                         })
 
-                        # Broadcast answer to chat feed
+                        # Broadcast answer to chat feed with clickable options
                         await self.broadcast({
                             "type": "CHAT_RESPONSE",
                             "text": msg_text,
+                            "options": opts,
                             "reason": reason
                         })
                         
@@ -1638,21 +1685,90 @@ class AgentCore:
                 "finish": True
             }
 
-        # 4. Fast Heuristic: Suno AI Studio Ready
+        # 4. Suno AI Studio Logic & Creative Action Handlers
         if "suno.com" in curr_url.lower() or "suno.ai" in curr_url.lower():
-            return {
-                "action": "respond",
-                "message": (
-                    f"🎵 **Suno AI Music Studio Active**\n\n"
-                    f"I have opened Suno AI for your prompt: **\"{clean_goal}\"**.\n\n"
-                    "• **Prompt Style**: Primed for your request (EDM Bass / Synthesis).\n"
-                    "• **Interactive Panel**: You can click **Create** or interact with the track controls directly on the right pane."
-                ),
-                "reason": "Suno AI studio active.",
-                "finish": True
-            }
+            p_goal_lower = clean_goal.lower()
+            
+            # Sub-case 1: User says "create", "studio", "open create", "make song", "compose", or clicks create chip
+            if any(k in p_goal_lower for k in ["create", "studio", "open create", "make", "compose", "song", "lyrics", "prompt"]):
+                # If currently on homepage, navigate to /create
+                if "/create" not in curr_url:
+                    return {
+                        "action": "navigate",
+                        "url": "https://suno.com/create",
+                        "reason": "Opening Suno AI creation studio (/create).",
+                        "options": [
+                            "✍️ Set EDM Bass Prompt",
+                            "📝 Enter Custom Lyrics",
+                            "🎛️ Instrumental Mode",
+                            "🎧 Play Generated Tracks"
+                        ]
+                    }
+                else:
+                    # Already in creation studio! Extract song prompt
+                    song_prompt = clean_goal
+                    for pfx in ["create", "click create", "make a song about", "make a song", "write a song about", "generate a song about", "generate"]:
+                        if song_prompt.lower().startswith(pfx):
+                            song_prompt = song_prompt[len(pfx):].strip(": -")
+                            break
+                    if not song_prompt or song_prompt.lower() in ["prompt", "create", "song"]:
+                        # Look at previous conversation turns for the song description!
+                        for turn in reversed(self.session_history[:-1]):
+                            if turn.get("role") == "user" and len(turn.get("text", "")) > 10:
+                                song_prompt = turn["text"]
+                                break
+                    if not song_prompt:
+                        song_prompt = "EDM Bass high energy synthesizer beat"
 
-        # 5. Fast Heuristic: Google Search Results Extraction
+                    return {
+                        "action": "type",
+                        "selector": "textarea[placeholder*='prompt'], textarea[placeholder*='lyrics'], textarea, [contenteditable='true']",
+                        "text": song_prompt,
+                        "press_enter": False,
+                        "reason": f"Priming song prompt in Suno Studio: '{song_prompt[:60]}...'",
+                        "options": [
+                            "🚀 Click Create to Generate",
+                            "✍️ Edit Lyrics",
+                            "🎛️ Instrumental Mode",
+                            "🎧 Play Song"
+                        ]
+                    }
+
+            # Sub-case 2: Playback controls
+            elif any(k in p_goal_lower for k in ["play", "listen", "start music", "pause", "track"]):
+                return {
+                    "action": "click",
+                    "selector": "button[aria-label*='Play'], button[title*='Play'], [data-testid*='play'], svg[aria-label*='Play']",
+                    "reason": "Triggering playback on Suno AI player.",
+                    "options": [
+                        "⏸️ Pause Playback",
+                        "⏭️ Next Track",
+                        "🔁 Loop Track",
+                        "✨ Create Another Song"
+                    ]
+                }
+
+            # Sub-case 3: Initial arrival on Suno AI
+            else:
+                return {
+                    "action": "respond",
+                    "message": (
+                        f"🎵 **Suno AI Music Studio Active**\n\n"
+                        f"I have opened **Suno AI** for your request: **\"{clean_goal}\"**.\n\n"
+                        "• **Music Engine**: Ready to generate vocal songs or instrumental tracks.\n"
+                        "• **Interactive Studio**: Click **Create Studio** below to start, or type your song idea!"
+                    ),
+                    "options": [
+                        "✨ Open Create Studio",
+                        "🎹 EDM Bass Track",
+                        "✍️ Custom Lyrics",
+                        "🎧 Listen to Trending"
+                    ],
+                    "reason": "Suno AI studio ready.",
+                    "finish": True
+                }
+
+        # 5. Fast Heuristic: Google Search Results Extraction with Clickable Options
         if ("google.com" in curr_url.lower() or "bing.com" in curr_url.lower()) and ("/search" in curr_url.lower() or "search?" in curr_url.lower()):
             try:
                 results = await self.page.evaluate("""() => {
@@ -1688,13 +1804,21 @@ class AgentCore:
             else:
                 content_summary = f"Explored live results for **\"{clean_goal}\"**."
 
+            search_opts = [
+                "📍 Open in Google Maps",
+                "⭐ Filter Top Rated 4.5+",
+                "💰 Budget Friendly Spots",
+                "🌐 Visit Top Result"
+            ]
+
             return {
                 "action": "respond",
                 "message": (
                     f"Here are the top findings for **\"{clean_goal}\"**:\n\n"
                     f"{content_summary}\n\n"
-                    f"👉 *You can click, scroll, and explore the live webpage directly in the right viewport!*"
+                    f"👉 *You can click, scroll, and explore the live webpage directly in the right viewport, or pick an option below!*"
                 ),
+                "options": search_opts,
                 "reason": f"Extracted organic search results for '{clean_goal}'.",
                 "finish": True
             }
@@ -1719,11 +1843,12 @@ class AgentCore:
 
         messages = [{"role": "system", "content": sys_prompt}]
 
-        # Add only the most recent previous turn if available (keeps tokens small)
-        if len(self.session_history) > 1:
-            last_turn = self.session_history[-2]
-            if last_turn.get("role") == "user":
-                messages.append({"role": "user", "content": f"[Previous]: {last_turn.get('text', '')[:150]}"})
+        # Multi-turn conversation history window (remembers previous chats and actions across turns)
+        for turn in self.session_history[-8:]:
+            r = "assistant" if turn.get("role") in ["agent", "assistant"] else "user"
+            txt = (turn.get("text") or "").strip()
+            if txt:
+                messages.append({"role": r, "content": txt[:280]})
 
         # Trim elements to 800 chars max
         dom_trimmed = (dom_elements or "")[:800]
@@ -1797,6 +1922,82 @@ class AgentCore:
             }
 
         return {"action": "scroll", "reason": "Scanning page content."}
+
+    def _generate_context_options(self, url: str, goal: str, message: str = "") -> List[str]:
+        """Generates dynamic context-aware quick action pills/options for the user."""
+        url_lower = (url or "").lower()
+        goal_lower = (goal or "").lower()
+
+        if "suno.com" in url_lower or "suno" in goal_lower:
+            return [
+                "✨ Open Create Studio",
+                "🎹 EDM Bass Track",
+                "✍️ Custom Lyrics",
+                "🎧 Play Trending Tracks"
+            ]
+        elif "abhibus.com" in url_lower or "abhibus" in goal_lower:
+            return [
+                "🚌 Bangalore to Mysore",
+                "🚌 Bangalore to Hyderabad",
+                "🌙 AC Sleeper Only",
+                "💰 Lowest Fare First"
+            ]
+        elif "redbus.in" in url_lower or "redbus" in goal_lower:
+            return [
+                "🚌 Search Bus Routes",
+                "🌙 AC Sleeper Fleets",
+                "⭐ Top Rated RTCs",
+                "📅 Tomorrow's Buses"
+            ]
+        elif "google.com" in url_lower or "bing.com" in url_lower:
+            return [
+                "🌐 Visit Top Result",
+                "📍 Open in Google Maps",
+                "⭐ Top Rated 4.5+",
+                "🔍 Narrow Search"
+            ]
+        elif "youtube.com" in url_lower or "youtube" in goal_lower:
+            return [
+                "▶️ Play First Video",
+                "🔍 Search Specific Song",
+                "🎧 Add to Queue",
+                "📺 Fullscreen View"
+            ]
+        elif "swiggy.com" in url_lower or "zomato.com" in url_lower or "biryani" in goal_lower:
+            return [
+                "🍕 Top Rated Nearby",
+                "💰 Budget Friendly",
+                "⚡ Fast Delivery",
+                "⭐ Customer Reviews"
+            ]
+        elif "amazon.in" in url_lower or "flipkart.com" in url_lower:
+            return [
+                "⭐ 4+ Star Rated",
+                "💰 Lowest Price",
+                "⚡ Prime / Assured",
+                "🏷️ Today's Deals"
+            ]
+        elif "wikipedia.org" in url_lower:
+            return [
+                "📖 Read Overview",
+                "📑 Table of Contents",
+                "🔍 Key Facts",
+                "🔗 References"
+            ]
+        elif any(k in goal_lower for k in ["hi", "hello", "hey"]):
+            return [
+                "🔍 Search the Web",
+                "🎵 Open Suno AI",
+                "🚌 Book on AbhiBus",
+                "⚡ Fix Passport Photo"
+            ]
+        else:
+            return [
+                "👉 Continue Automation",
+                "🔍 Search More Details",
+                "🔄 Refresh Page",
+                "🛑 Stop Agent"
+            ]
 
 # Global Singleton Instance
 agent_core = AgentCore()
