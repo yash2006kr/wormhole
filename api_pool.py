@@ -203,9 +203,11 @@ class OpenRouterProvider:
         self.api_key = os.getenv("OPENROUTER_API_KEY", "").strip().strip("'\"")
         self.cooldown_until = 0.0
         self.models = [
-            "meta-llama/llama-3.3-70b-instruct:free",
-            "google/gemini-2.0-flash-exp:free",
-            "qwen/qwen-2.5-72b-instruct:free"
+            "nvidia/nemotron-3.5-lightning:free",
+            "google/gemma-4-26b-a4b-it:free",
+            "liquid/lfm-2.5-2.6b:free",
+            "recursive/flint-v1.0:free",
+            "meta-llama/llama-3.3-70b-instruct:free"
         ]
         if self.api_key:
             print("[API POOL] Initialized OpenRouter Free Tier Provider.")
@@ -220,8 +222,7 @@ class OpenRouterProvider:
                 "model": model,
                 "messages": messages,
                 "temperature": 0.1,
-                "max_tokens": max_tokens,
-                "response_format": {"type": "json_object"}
+                "max_tokens": max_tokens
             }
             try:
                 req = urllib.request.Request(
@@ -236,7 +237,8 @@ class OpenRouterProvider:
                 )
                 with urllib.request.urlopen(req, timeout=12) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
-                    text = data["choices"][0]["message"]["content"].strip()
+                    msg = data["choices"][0]["message"]
+                    text = (msg.get("content") or msg.get("reasoning") or "").strip()
                     parsed = self._clean_and_parse_json(text)
                     if parsed:
                         print(f"[API POOL] [OK] OpenRouter ({model}) returned action: '{parsed.get('action')}'")
@@ -284,8 +286,7 @@ class CerebrasProvider:
                 "model": model,
                 "messages": messages,
                 "temperature": 0.1,
-                "max_tokens": max_tokens,
-                "response_format": {"type": "json_object"}
+                "max_tokens": max_tokens
             }
             try:
                 req = urllib.request.Request(
@@ -298,7 +299,8 @@ class CerebrasProvider:
                 )
                 with urllib.request.urlopen(req, timeout=10) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
-                    text = data["choices"][0]["message"]["content"].strip()
+                    msg = data["choices"][0]["message"]
+                    text = (msg.get("content") or msg.get("reasoning") or "").strip()
                     parsed = json.loads(text)
                     if parsed:
                         print(f"[API POOL] [OK] Cerebras ({model}) returned action: '{parsed.get('action')}'")
