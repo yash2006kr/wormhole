@@ -60,9 +60,9 @@ class AgentCore:
         self.action_history = []
         self.viewport_size = {"width": 1280, "height": 800}
 
-    def reset_session(self):
-        """Clears in-memory session history, uploaded files, and context when user clicks New Chat."""
-        print("[AGENT CORE] Resetting session memory for New Chat.")
+    async def reset_session(self):
+        """Clears in-memory session history, uploaded files, and context when user clicks New Chat. Clears live browser to null."""
+        print("[AGENT CORE] Resetting session memory for New Chat. Navigating browser to about:blank...")
         self.session_history = []
         self.session_files = []
         self.session_context = ""
@@ -73,6 +73,18 @@ class AgentCore:
         self.state = "IDLE"
         if self.execution_task and not self.execution_task.done():
             self.execution_task.cancel()
+
+        # Clear live webpage to null (about:blank)
+        if self.page:
+            try:
+                await self.page.goto("about:blank", wait_until="domcontentloaded", timeout=8000)
+                await self.broadcast({
+                    "type": "URL_UPDATE",
+                    "url": "",
+                    "title": ""
+                })
+            except Exception as e:
+                print(f"[!] Browser clear error on reset: {e}")
 
     async def initialize(self):
         """Spins up Playwright Chromium with stealth configs and CDP session."""
@@ -834,7 +846,13 @@ class AgentCore:
 
                         if action.get("finish_after", True):
                             print(f"  -> Form Complete: {reason}")
-                            await self.broadcast({"type": "COMPLETE", "reason": f"Form populated: {reason}"})
+                            timestamp = time.strftime("%H:%M:%S")
+                            self.session_history.append({
+                                "role": "agent",
+                                "text": f"Successfully filled form: {reason}",
+                                "time": timestamp
+                            })
+                            await self.broadcast({"type": "COMPLETE", "reason": f"Form populated: {reason}", "has_chat_response": True})
                             break
 
                     elif action_type == "type":
@@ -890,25 +908,21 @@ class AgentCore:
                             break
 
                     elif action_type == "finish":
-                        msg_text = action.get("message") or action.get("response") or ""
-                        if not msg_text and any(q_word in self.current_goal.lower() for q_word in ["fetch", "about", "tell me", "what", "who", "give it in chat", "details", "explain", "summarize"]):
-                            msg_text = reason
-                        
-                        if msg_text:
-                            timestamp = time.strftime("%H:%M:%S")
-                            self.session_history.append({
-                                "role": "agent",
-                                "text": msg_text,
-                                "time": timestamp
-                            })
-                            await self.broadcast({
-                                "type": "CHAT_RESPONSE",
-                                "text": msg_text,
-                                "reason": reason
-                            })
+                        msg_text = action.get("message") or action.get("response") or reason or "Task completed successfully."
+                        timestamp = time.strftime("%H:%M:%S")
+                        self.session_history.append({
+                            "role": "agent",
+                            "text": msg_text,
+                            "time": timestamp
+                        })
+                        await self.broadcast({
+                            "type": "CHAT_RESPONSE",
+                            "text": msg_text,
+                            "reason": reason
+                        })
 
                         print(f"  -> Task Complete: {reason}")
-                        await self.broadcast({"type": "COMPLETE", "reason": reason, "has_chat_response": bool(msg_text)})
+                        await self.broadcast({"type": "COMPLETE", "reason": reason, "has_chat_response": True})
                         break
 
                 except Exception as e:
@@ -944,7 +958,8 @@ class AgentCore:
             }
 
         sys_prompt = (
-            "You are Jarvis-Wormhole, an elite autonomous web navigation, form-filling, and web intelligence agent.\n"
+            "You are Jarvis-Wormhole, an elite autonomous web navigation, form-filling, and web intelligence agent operating in an active multi-turn session.\n"
+            "You MUST remember all previous user requests and your previous responses in this session. If the user asks a follow-up question (e.g. 'tell me more', 'what degree did you mention', 'add job description based on resume', 'change that', 'what else'), you must refer to and build upon the earlier conversation context.\n"
             "Your objective is to inspect the active web page, understand the user's intent, and execute the exact right sequence of browser actions or directly formulate intelligent responses in chat.\n\n"
             "=== COGNITIVE PROTOCOLS ===\n"
             "1. INFORMATION EXTRACTION & CHAT Q&A PROTOCOL (HIGH PRIORITY):\n"
@@ -974,35 +989,58 @@ class AgentCore:
             "Always return valid JSON only."
         )
 
-        # Build turn conversation context
-        history_str = ""
+        # Construct true OpenAI / Groq multi-turn conversation messages array
+        messages = [
+            {"role": "system", "content": sys_prompt}
+        ]
+
+        # Add earlier turns in current session so the model natively remembers past prompts and answers
         if len(self.session_history) > 1:
-            history_str = "\n=== PREVIOUS TURNS IN CURRENT CHAT SESSION ===\n"
             for item in self.session_history[:-1]:
-                history_str += f"{item['role'].upper()}: {item['text']}\n"
+                if item["role"] == "user":
+                    messages.append({
+                        "role": "user",
+                        "content": f"[Previous User Request]: {item['text']}"
+                    })
+                elif item["role"] == "agent":
+                    messages.append({
+                        "role": "assistant",
+                        "content": json.dumps({
+                            "action": "respond",
+                            "message": item["text"],
+                            "reason": "Previous response in this conversation."
+                        })
+                    })
 
+        # Current turn payload
         user_msg = (
-            f"User Goal: {goal}\n\n"
-            f"{history_str}\n"
+            f"Current User Goal: {goal}\n\n"
+            f"Active Web Page: {curr_url} ('{curr_title}')\n\n"
             f"Attached Document / Candidate Resume Data:\n{context_info}\n\n"
-            f"Current Web Page: {curr_url} ('{curr_title}')\n\n"
-            f"Structured DOM Elements on Page:\n{dom_elements}\n"
+            f"Structured DOM Elements on Page:\n{dom_elements}\n\n"
+            f"Note: Maintain continuous memory of all previous turns. If the user refers to past responses, earlier questions, or resume details, use that conversation history to answer or act accurately."
         )
+        messages.append({"role": "user", "content": user_msg})
 
-        try:
-            res = groq_client.chat.completions.create(
-                model="openai/gpt-oss-20b",
-                messages=[
-                    {"role": "system", "content": sys_prompt},
-                    {"role": "user", "content": user_msg}
-                ],
-                temperature=0.1,
-                response_format={"type": "json_object"}
-            )
-            return json.loads(res.choices[0].message.content)
-        except Exception as e:
-            print(f"[!] Groq decision error: {e}")
-            return {"action": "finish", "reason": "Completed trajectory."}
+        # Try active models with fallback in case of rate limits
+        models_to_try = ["qwen/qwen3.8-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+        last_error = None
+        for model_name in models_to_try:
+            try:
+                res = groq_client.chat.completions.create(
+                    model=model_name,
+                    messages=messages,
+                    temperature=0.1,
+                    response_format={"type": "json_object"}
+                )
+                return json.loads(res.choices[0].message.content)
+            except Exception as e:
+                last_error = e
+                print(f"[!] Groq decision error with model {model_name}: {e}")
+                continue
+
+        print(f"[!] All Groq models failed. Last error: {last_error}")
+        return {"action": "finish", "reason": "Completed trajectory."}
 
 # Global Singleton Instance
 agent_core = AgentCore()

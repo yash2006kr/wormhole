@@ -210,9 +210,9 @@ async def handle_file_upload(req: Request):
 # ==============================================================================
 @app.post("/api/chat/new")
 async def create_new_chat():
-    print("\n[SESSION] New Chat created by user. Resetting session memory and files...")
-    agent_core.reset_session()
-    return JSONResponse({"status": "SUCCESS", "message": "New chat initialized."})
+    print("\n[SESSION] New Chat created by user. Resetting session memory, files, and clearing browser...")
+    await agent_core.reset_session()
+    return JSONResponse({"status": "SUCCESS", "message": "New chat initialized and browser cleared to null."})
 
 # ==============================================================================
 # EMERGENCY ABORT ENDPOINT

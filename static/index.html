@@ -38,6 +38,16 @@ body:before{content:"";position:fixed;inset:-20%;pointer-events:none;background:
 .chat-bubble.agent strong{color:#ffffff;font-weight:700}
 .chat-file-tag{display:inline-flex;align-items:center;gap:3px;background:#1e1b4b;border:1px solid #6366f1;color:#a5b4fc;font-size:9.5px;padding:1px 5px;border-radius:4px;margin-top:3px}
 
+/* AGENT THINKING ANIMATION */
+.agent-thinking-bubble{display:flex;align-items:center;gap:8px;background:linear-gradient(135deg,rgba(121,232,243,0.1),rgba(163,140,255,0.06));border:1px dashed rgba(121,232,243,0.38);border-radius:8px;padding:7px 11px;font-size:11px;color:var(--cyan);align-self:flex-start;max-width:85%;animation:thinkingPulse 1.8s ease-in-out infinite alternate}
+@keyframes thinkingPulse{0%{border-color:rgba(121,232,243,0.25);box-shadow:0 0 6px rgba(121,232,243,0.05)}100%{border-color:rgba(121,232,243,0.6);box-shadow:0 0 14px rgba(121,232,243,0.22)}}
+.thinking-dots{display:inline-flex;gap:4px;align-items:center;margin-left:3px}
+.thinking-dots span{width:5px;height:5px;border-radius:50%;background:var(--cyan);display:inline-block;animation:dotBounce 1.4s infinite ease-in-out both}
+.thinking-dots span:nth-child(1){animation-delay:-0.32s}
+.thinking-dots span:nth-child(2){animation-delay:-0.16s}
+.thinking-dots span:nth-child(3){animation-delay:0s}
+@keyframes dotBounce{0%,80%,100%{transform:scale(0.3);opacity:0.3}40%{transform:scale(1.15);opacity:1}}
+
 /* ROBOT PART (SHOWN IN TEXT MODE) */
 .bot-scene{height:140px;display:flex;align-items:flex-end;justify-content:center;position:relative;margin:0 -20px 8px;overflow:hidden;z-index:1;background:radial-gradient(ellipse at 50% 100%,rgba(115,81,216,.2),transparent 66%)}
 .bot-scene:before{content:"";position:absolute;width:280px;height:84px;border:1px solid #95e5f333;border-radius:50%;bottom:-60px;box-shadow:0 0 34px #8b7aff20,0 0 0 18px #8b7aff08;transform:rotate(-7deg)}
@@ -572,6 +582,7 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
 
         // Instant Interrupt Triggered
         else if (msg.type === "INTERRUPT_TRIGGERED") {
+          removeThinkingIndicator();
           if (isNormalBrowsingActive) return;
           updateAgentState("INTERRUPTED");
           let ctxBox = document.getElementById("interrupt-context");
@@ -584,6 +595,7 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
 
         // Human Verification / Login Gate
         else if (msg.type === "HUMAN_VERIFICATION_REQUIRED" || msg.type === "PAYMENT_OR_LOGIN_GATE") {
+          removeThinkingIndicator();
           updateAgentState("PAUSED_FOR_HUMAN");
           let banner = document.getElementById("human-verify-banner");
           banner.style.display = "flex";
@@ -600,12 +612,14 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
         } else if (msg.type === "ACTION") {
           log(`  ➔ Action: ${msg.action} (${msg.reason})`, "success");
         } else if (msg.type === "CHAT_RESPONSE" || msg.type === "AGENT_RESPONSE") {
+          removeThinkingIndicator();
           log(`[AGENT ANSWER] Response formulated (${msg.text.length} chars)`, "success");
           appendChatMessage("agent", msg.text);
           if (inputMode === "voice") {
             speakText(msg.text);
           }
         } else if (msg.type === "COMPLETE") {
+          removeThinkingIndicator();
           log(`[TASK COMPLETED] ${msg.reason}`, "success");
           if (!msg.has_chat_response) {
             appendChatMessage("agent", `✅ ${msg.reason}`);
@@ -727,6 +741,7 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
       document.getElementById("redirect-prompt-input").value = "";
       log(`[USER REDIRECTION] New instruction applied: "${promptText}"`, "success");
       appendChatMessage("user", `[Redirect] ${promptText}`);
+      showThinkingIndicator();
 
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
@@ -748,6 +763,7 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
     }
 
     async function abortAgent() {
+      removeThinkingIndicator();
       log("[STOP] Halting agent execution immediately...", "danger");
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: "ABORT_TASK" }));
@@ -863,8 +879,36 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
       if (feed) feed.style.display = "flex";
     }
 
+    function showThinkingIndicator() {
+      removeThinkingIndicator();
+      const feed = document.getElementById("chat-history-feed");
+      if (!feed) return;
+      showChatAndHideHero();
+      const thinkEl = document.createElement("div");
+      thinkEl.id = "agent-thinking-indicator";
+      thinkEl.className = "agent-thinking-bubble";
+      thinkEl.innerHTML = `
+        <span style="font-weight:700; display:flex; align-items:center; gap:4px;">
+          <span style="color:var(--cyan)">◉</span> Warmhole Agent is thinking
+        </span>
+        <span class="thinking-dots">
+          <span></span><span></span><span></span>
+        </span>
+      `;
+      feed.appendChild(thinkEl);
+      feed.scrollTop = feed.scrollHeight;
+    }
+
+    function removeThinkingIndicator() {
+      const el = document.getElementById("agent-thinking-indicator");
+      if (el) el.remove();
+    }
+
     function appendChatMessage(role, text, fileList=[]) {
       showChatAndHideHero();
+      if (role === "agent") {
+        removeThinkingIndicator();
+      }
       const feed = document.getElementById("chat-history-feed");
       if (!feed) return;
       const msgEl = document.createElement("div");
@@ -895,6 +939,13 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
       serverUploadedFiles = [];
       renderAttachedFiles();
       document.getElementById("user-input").value = "";
+      
+      // Clear browser address bar and viewport to blank
+      updateAddressBar("");
+      ctx.fillStyle = "#080a14";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      removeThinkingIndicator();
       const feed = document.getElementById("chat-history-feed");
       if (feed) {
         feed.innerHTML = "";
@@ -909,7 +960,7 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
         if (botScene) botScene.style.display = isVoice ? "none" : "flex";
         if (voiceStage) voiceStage.style.display = isVoice ? "flex" : "none";
       }
-      log("[NEW CHAT] Clean session initialized. All previous memory & attached files reset.", "warn");
+      log("[NEW CHAT] Clean session initialized. Live web viewport cleared to null.", "warn");
       updateAgentState("IDLE");
       try {
         await fetch("/api/chat/new", { method: "POST" });
@@ -924,8 +975,9 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
       const query = input.value.trim();
       if (!query && attachedFiles.length === 0) return;
 
-      // Add to session chat stream
+      // Add to session chat stream and show thinking animation
       appendChatMessage("user", query, attachedFiles);
+      showThinkingIndicator();
 
       log(`[USER COMMAND] "${query}" (${attachedFiles.length} file(s) attached)`);
       input.value = "";
