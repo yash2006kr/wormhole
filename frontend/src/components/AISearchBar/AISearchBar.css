@@ -16,6 +16,16 @@
   gap: 16px;
   pointer-events: auto;
   user-select: none;
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+              visibility 0.7s;
+}
+
+.ai-search-wrapper.hidden {
+  opacity: 0;
+  transform: translateX(-50%) translateY(32px) scale(0.94);
+  pointer-events: none;
+  visibility: hidden;
 }
 
 /* Header Text / Tagline above Search Bar */

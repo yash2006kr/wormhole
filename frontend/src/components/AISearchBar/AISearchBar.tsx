@@ -40,7 +40,7 @@ const AISearchBar: React.FC<AISearchBarProps> = ({
   };
 
   return (
-    <div className="ai-search-wrapper">
+    <div className={`ai-search-wrapper ${isSearchHidden ? "hidden" : ""}`}>
       {/* Header Tagline */}
       <div className="ai-search-header">
         <h2 className="ai-search-title">{title}</h2>
