@@ -22,6 +22,20 @@
 
 ---
 
+## 🚨 Surprise Hurdle Defense: "Crash After Submit"
+*(See detailed architecture & test guide in [SURPRISE_HURDLE.md](SURPRISE_HURDLE.md))*
+
+* **Irreversible Action Idempotency Sentinel (Hint 1)**:
+  - Write-Ahead Log (WAL) in `transaction_ledger.json` records in-flight payment intents before clicks.
+  - Abrupt browser crash post-click triggers autonomous reconciliation without double-paying on restart.
+* **Voice Financial Anchor & Sneaky Fee Interceptor (Hint 2)**:
+  - Compares final checkout amounts against voice-approved budget.
+  - Detects quiet drip-pricing surcharges added at final steps and halts checkout immediately.
+* **Voice Ambiguity Clarification Protocol (Hint 3)**:
+  - Intercepts underspecified voice commands when multiple options exist, presenting choice chips and speaking clarifications instead of guessing.
+
+---
+
 ## 🛠️ Architecture & Tech Stack
 
 ```
