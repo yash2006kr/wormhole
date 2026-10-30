@@ -3,8 +3,8 @@ ApplyCopilot (Wormhole) Real-Time Agentic Web Engine
 Features:
 - Live CDP Screencast streaming to WebSockets with Wheel Scrolling & Mouse Movement
 - DOM-Aware Autonomous Reasoning via Groq LPU (openai/gpt-oss-20b)
-- Multi-Input Form Filling (fill_form action with smart SPA section activation)
-- Document Context Ingestion (extracts text from attached PDFs and credentials from vault)
+- Multi-Input Form Filling & Rich ContentEditable / Job Description Editor Support
+- In-Memory Multi-Turn Session Memory (remembers resume & chat context across turns until New Chat)
 - Instant Human-in-the-Loop Interrupt Gate & Emergency Abort
 - Advanced Semantic Web Navigation & Self-Healing Action Fallbacks
 """
@@ -44,6 +44,12 @@ class AgentCore:
         self.current_goal = None
         self.current_context = ""
         self.attached_files = []
+        
+        # Multi-Turn Session Memory (preserved across turns until user creates New Chat)
+        self.session_history = []     # List of {"role": "user"|"agent", "text": "...", "time": "..."}
+        self.session_files = []       # List of attached file dicts
+        self.session_context = ""     # Accumulated text from resumes & attached documents
+        
         self.interrupt_event = asyncio.Event()
         self.resume_event = asyncio.Event()
         self.interrupt_resolution = None # "RESUME", "REPLAN", "HANDOVER"
@@ -53,6 +59,20 @@ class AgentCore:
         self.execution_task = None
         self.action_history = []
         self.viewport_size = {"width": 1280, "height": 800}
+
+    def reset_session(self):
+        """Clears in-memory session history, uploaded files, and context when user clicks New Chat."""
+        print("[AGENT CORE] Resetting session memory for New Chat.")
+        self.session_history = []
+        self.session_files = []
+        self.session_context = ""
+        self.current_goal = None
+        self.current_context = ""
+        self.attached_files = []
+        self.action_history = []
+        self.state = "IDLE"
+        if self.execution_task and not self.execution_task.done():
+            self.execution_task.cancel()
 
     async def initialize(self):
         """Spins up Playwright Chromium with stealth configs and CDP session."""
@@ -146,14 +166,12 @@ class AgentCore:
         # If IDLE or MANUAL_CONTROL -> forward click with mouseMoved first
         if self.cdp:
             try:
-                # 1. Dispatch mouseMoved to trigger hover / active states
                 await self.cdp.send("Input.dispatchMouseEvent", {
                     "type": "mouseMoved",
                     "x": actual_x,
                     "y": actual_y
                 })
                 await asyncio.sleep(0.02)
-                # 2. Press
                 await self.cdp.send("Input.dispatchMouseEvent", {
                     "type": "mousePressed",
                     "x": actual_x,
@@ -162,7 +180,6 @@ class AgentCore:
                     "clickCount": 1
                 })
                 await asyncio.sleep(0.04)
-                # 3. Release
                 await self.cdp.send("Input.dispatchMouseEvent", {
                     "type": "mouseReleased",
                     "x": actual_x,
@@ -310,7 +327,7 @@ class AgentCore:
     # RICH DOM INSPECTOR: EXTRACTS STRUCTURED CONTEXT & INTERACTIVE ELEMENTS
     # --------------------------------------------------------------------------
     async def _get_interactive_dom_elements(self):
-        """Extracts structured DOM: headings, navigation tabs, forms, buttons, and alert notices."""
+        """Extracts structured DOM: headings, navigation tabs, forms, rich textareas, buttons, and notices."""
         if not self.page:
             return ""
         try:
@@ -326,7 +343,7 @@ class AgentCore:
 
                 const cleanText = (t) => (t || '').replace(/\\s+/g, ' ').trim().slice(0, 60);
 
-                // 1. Page Title & Headings (to know what page/section is active)
+                // 1. Page Title & Headings (to understand context & topic)
                 const headings = [];
                 document.querySelectorAll('h1, h2, h3').forEach((h, i) => {
                     if (i < 8) {
@@ -348,27 +365,47 @@ class AgentCore:
                     }
                 });
 
-                // 3. Inputs, Textareas, Selects
+                // 3. Inputs, Textareas, Selects, and Rich ContentEditable Textboxes (Indeed, LinkedIn, Quill, ProseMirror)
                 const formFields = [];
-                document.querySelectorAll('input:not([type="hidden"]), textarea, select').forEach((el, i) => {
-                    if (i < 25) {
+                document.querySelectorAll('input:not([type="hidden"]), textarea, select, [contenteditable="true"], [role="textbox"]').forEach((el, i) => {
+                    if (formFields.length < 30) {
                         const tag = el.tagName.toLowerCase();
                         const id = el.id ? '#' + el.id : '';
                         const name = el.name ? `[name="${el.name}"]` : '';
                         const type = el.type ? `[type="${el.type}"]` : '';
-                        const placeholder = el.placeholder ? `placeholder="${cleanText(el.placeholder)}"` : '';
+                        const isRich = el.getAttribute('contenteditable') === 'true' || el.getAttribute('role') === 'textbox';
+                        const richBadge = isRich ? ' (RichTextEditor/ContentEditable)' : '';
                         
-                        let labelText = '';
-                        if (el.id) {
+                        let placeholder = el.placeholder || el.getAttribute('data-placeholder') || el.getAttribute('aria-placeholder') || '';
+                        const placeholderStr = placeholder ? `placeholder="${cleanText(placeholder)}"` : '';
+                        
+                        // Associated Label / Heading
+                        let labelText = el.getAttribute('aria-label') || '';
+                        if (!labelText && el.id) {
                             const lbl = document.querySelector(`label[for="${el.id}"]`);
                             if (lbl) labelText = cleanText(lbl.innerText);
                         }
                         if (!labelText && el.closest('label')) {
                             labelText = cleanText(el.closest('label').innerText);
                         }
+                        if (!labelText) {
+                            const prev = el.previousElementSibling;
+                            if (prev && (prev.tagName.startsWith('H') || prev.tagName === 'LABEL' || (prev.className && String(prev.className).includes('label')))) {
+                                labelText = cleanText(prev.innerText);
+                            }
+                        }
                         const labelStr = labelText ? `label="${labelText}"` : '';
                         const vis = isVisible(el) ? 'visible' : 'hidden';
-                        formFields.push(`FIELD: ${tag}${id}${name}${type} ${placeholder} ${labelStr} [${vis}]`.replace(/\\s+/g, ' ').trim());
+                        
+                        let selectorHint = tag + id + name + type;
+                        if (isRich && !id && !name) {
+                            const testId = el.getAttribute('data-testid');
+                            if (testId) selectorHint += `[data-testid="${testId}"]`;
+                            else if (el.className) selectorHint += '.' + el.className.trim().split(/\\s+/).slice(0, 2).join('.');
+                            else selectorHint += '[contenteditable="true"]';
+                        }
+                        
+                        formFields.push(`FIELD: ${selectorHint}${richBadge} ${placeholderStr} ${labelStr} [${vis}]`.replace(/\\s+/g, ' ').trim());
                     }
                 });
 
@@ -398,7 +435,7 @@ class AgentCore:
                 let output = [];
                 if (headings.length) output.push("=== PAGE HEADINGS ===\\n" + headings.join("\\n"));
                 if (navItems.length) output.push("=== NAVIGATION & SECTION LINKS ===\\n" + navItems.join("\\n"));
-                if (formFields.length) output.push("=== FORM INPUT FIELDS ===\\n" + formFields.join("\\n"));
+                if (formFields.length) output.push("=== FORM INPUT FIELDS & EDITORS ===\\n" + formFields.join("\\n"));
                 if (buttons.length) output.push("=== BUTTONS & SUBMIT CONTROLS ===\\n" + buttons.join("\\n"));
                 if (notices.length) output.push("=== NOTICES ON PAGE ===\\n" + notices.join("\\n"));
 
@@ -419,7 +456,6 @@ class AgentCore:
             return False
 
         clean_sel = raw_selector or ""
-        # Clean Groq pseudoselectors like button: text="..." -> button:has-text("...")
         if "text=" in clean_sel and not clean_sel.startswith("text="):
             txt_part = clean_sel.split("text=")[1].strip(" :\"'").replace('"', '')
             clean_sel = f'button:has-text("{txt_part}"), a:has-text("{txt_part}")'
@@ -479,6 +515,67 @@ class AgentCore:
 
         return False
 
+    async def _fill_any_input(self, selector, value):
+        """Fills standard inputs, textareas, and rich contenteditable textboxes (Indeed, LinkedIn)."""
+        if not self.page:
+            return False
+
+        loc = self.page.locator(selector).first
+        if await loc.count() == 0:
+            return False
+
+        try:
+            await loc.scroll_into_view_if_needed(timeout=2500)
+            await loc.click(timeout=2500)
+            await asyncio.sleep(0.15)
+
+            # Check if element is a rich text editor or contenteditable
+            is_rich = await loc.evaluate("""
+                el => el.isContentEditable || 
+                      el.getAttribute('contenteditable') === 'true' || 
+                      el.getAttribute('role') === 'textbox' || 
+                      el.classList.contains('ql-editor') ||
+                      el.classList.contains('public-DraftEditor-content')
+            """)
+
+            if is_rich:
+                print(f"  -> Filling rich contenteditable editor '{selector}'...")
+                # Method 1: document.execCommand('insertHTML')
+                await loc.evaluate("""
+                    (el, val) => {
+                        el.focus();
+                        const htmlContent = val.split('\\n').map(p => p.trim() ? `<p>${p}</p>` : '<p><br></p>').join('');
+                        document.execCommand('selectAll', false, null);
+                        document.execCommand('insertHTML', false, htmlContent);
+                        if (!el.innerText.trim()) {
+                            el.innerHTML = htmlContent;
+                        }
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                """, value)
+                await asyncio.sleep(0.3)
+
+                # Method 2: If still empty, use direct keyboard typing
+                content_len = await loc.evaluate("el => el.innerText.trim().length")
+                if content_len < 5:
+                    await loc.focus()
+                    await self.page.keyboard.insert_text(value)
+                return True
+            else:
+                # Standard input or textarea
+                await loc.fill(value, timeout=4000)
+                return True
+        except Exception as e:
+            print(f"  [!] Fill error on '{selector}': {e}")
+            # Fallback to direct keyboard insert
+            try:
+                await loc.focus()
+                await self.page.keyboard.insert_text(value)
+                return True
+            except Exception:
+                return False
+
     # --------------------------------------------------------------------------
     # AUTONOMOUS AGENTIC EXECUTION LOOP
     # --------------------------------------------------------------------------
@@ -491,6 +588,14 @@ class AgentCore:
         self.action_history = []
         self.interrupt_event.clear()
         self.resume_event.clear()
+
+        # Record prompt in multi-turn session history
+        timestamp = time.strftime("%H:%M:%S")
+        self.session_history.append({
+            "role": "user",
+            "text": goal,
+            "time": timestamp
+        })
 
         # PRE-CHECK: If goal contains an explicit URL, navigate directly before entering the loop!
         found_urls = re.findall(r'https?://[^\s<>"\',;]+', goal)
@@ -569,10 +674,10 @@ class AgentCore:
                     })
                     await self.resume_event.wait()
 
-                # Extract live interactive DOM elements
+                # Extract live interactive DOM elements (including rich editors)
                 dom_elements = await self._get_interactive_dom_elements()
 
-                # Ask Groq LPU for next action
+                # Ask Groq LPU for next action (providing full multi-turn session context & resume data)
                 action = await self._decide_next_action(
                     self.current_goal, curr_url, curr_title, dom_elements, self.current_context
                 )
@@ -614,7 +719,6 @@ class AgentCore:
                                     break
                         target_url = url_cand if url_cand.startswith("http") else f"https://{url_cand}"
                         
-                        # If already at destination
                         if target_url.rstrip("/") in curr_url.rstrip("/") and len(curr_url) > 10:
                             print(f"  -> Arrived at target: {curr_url}")
                         else:
@@ -640,96 +744,75 @@ class AgentCore:
                             except Exception:
                                 pass
 
-                        # 2. Fill each input field with robust fallbacks
+                        # 2. Fill each input field with robust rich-text & candidate fallbacks
                         for f_sel, f_val in fields.items():
                             val_str = str(f_val)
-                            print(f"  -> Filling field '{f_sel}' with: {val_str[:35]}...")
-                            filled = False
-                            
-                            # Try primary selector
-                            try:
-                                loc = self.page.locator(f_sel).first
-                                if await loc.count() > 0:
-                                    await loc.scroll_into_view_if_needed(timeout=2500)
-                                    await loc.fill(val_str, timeout=3000)
-                                    filled = True
-                            except Exception:
-                                pass
+                            print(f"  -> Filling field '{f_sel}' with: {val_str[:40]}...")
+                            filled = await self._fill_any_input(f_sel, val_str)
 
                             # Heuristic Fallback based on field intent
                             if not filled:
                                 f_lower = f_sel.lower()
                                 fallback_candidates = []
-                                if "name" in f_lower:
+                                if "description" in f_lower or "desc" in f_lower or "job" in f_lower:
+                                    fallback_candidates = [
+                                        "div[contenteditable='true']",
+                                        "[role='textbox']",
+                                        ".ql-editor",
+                                        "textarea[name*='description' i]",
+                                        "textarea[id*='description' i]",
+                                        "div[aria-label*='description' i]",
+                                        "textarea"
+                                    ]
+                                elif "name" in f_lower:
                                     fallback_candidates = ["#form-name", "input[name='name']", "input[placeholder*='name' i]", "input[type='text']"]
                                 elif "email" in f_lower:
                                     fallback_candidates = ["#form-email", "input[type='email']", "input[name='email']", "input[placeholder*='email' i]"]
                                 elif "message" in f_lower or "comment" in f_lower or "body" in f_lower:
-                                    fallback_candidates = ["#form-message", "textarea[name='message']", "textarea", "textarea[placeholder*='message' i]"]
+                                    fallback_candidates = ["#form-message", "textarea[name='message']", "textarea", "div[contenteditable='true']"]
 
                                 for cand in fallback_candidates:
-                                    try:
-                                        loc = self.page.locator(cand).first
-                                        if await loc.count() > 0:
-                                            await loc.scroll_into_view_if_needed(timeout=2000)
-                                            await loc.fill(val_str, timeout=3000)
-                                            filled = True
-                                            print(f"     [Fallback Success] Field filled via candidate '{cand}'")
-                                            break
-                                    except Exception:
-                                        continue
+                                    if await self._fill_any_input(cand, val_str):
+                                        filled = True
+                                        print(f"     [Fallback Success] Field filled via candidate '{cand}'")
+                                        break
 
                             await asyncio.sleep(0.3)
 
-                        # 3. Submit form
-                        submit_sel = action.get("submit_selector") or "button[type='submit'], input[type='submit']"
-                        print(f"  -> Submitting form: {submit_sel}")
-                        submitted = await self._smart_click(submit_sel)
-                        if not submitted:
-                            # Try submit button fallbacks
-                            for s_cand in ["button:has-text('Send Message')", "button:has-text('Send')", "button:has-text('Submit')", "button[type='submit']"]:
-                                if await self._smart_click(s_cand):
-                                    submitted = True
-                                    break
+                        # 3. Submit form if requested
+                        submit_sel = action.get("submit_selector")
+                        if submit_sel:
+                            print(f"  -> Submitting form: {submit_sel}")
+                            submitted = await self._smart_click(submit_sel)
+                            if not submitted:
+                                for s_cand in ["button:has-text('Send Message')", "button:has-text('Submit')", "button:has-text('Post')", "button[type='submit']"]:
+                                    if await self._smart_click(s_cand):
+                                        break
                         
-                        await asyncio.sleep(2.0)
+                        await asyncio.sleep(1.5)
 
                         if action.get("finish_after", True):
                             print(f"  -> Form Complete: {reason}")
-                            await self.broadcast({"type": "COMPLETE", "reason": f"Form submitted: {reason}"})
+                            await self.broadcast({"type": "COMPLETE", "reason": f"Form populated: {reason}"})
                             break
 
                     elif action_type == "type":
-                        target_selector = selector or "input, textarea"
-                        print(f"  -> Typing '{text_val}' into: {target_selector}")
-                        typed = False
-                        try:
-                            loc = self.page.locator(target_selector).first
-                            await loc.scroll_into_view_if_needed(timeout=3000)
-                            await loc.fill(text_val, timeout=5000)
-                            if action.get("press_enter"):
-                                await loc.press("Enter")
-                            typed = True
-                        except Exception:
-                            pass
-
+                        target_selector = selector or "input, textarea, div[contenteditable='true']"
+                        print(f"  -> Typing into '{target_selector}'...")
+                        typed = await self._fill_any_input(target_selector, text_val)
                         if not typed:
-                            # Try first visible input
-                            try:
-                                loc = self.page.locator("input[type='text'], input[type='search'], textarea").first
-                                await loc.fill(text_val, timeout=4000)
-                                if action.get("press_enter"):
-                                    await loc.press("Enter")
-                            except Exception as te:
-                                print(f"  [!] Type fallback error: {te}")
+                            # Try general contenteditable or input
+                            for cand in ["[contenteditable='true']", "[role='textbox']", "textarea", "input[type='text']"]:
+                                if await self._fill_any_input(cand, text_val):
+                                    break
+                        if action.get("press_enter"):
+                            await self.page.keyboard.press("Enter")
                         await asyncio.sleep(1)
 
                     elif action_type == "click":
                         raw_sel = selector or text_val
                         print(f"  -> Clicking element: {raw_sel}")
-                        clicked = await self._smart_click(raw_sel, text=text_val)
-                        if not clicked:
-                            print(f"  [!] Primary click failed on '{raw_sel}'. Trying anchor/text fallback...")
+                        await self._smart_click(raw_sel, text=text_val)
                         await asyncio.sleep(1.5)
 
                     elif action_type == "scroll":
@@ -763,7 +846,7 @@ class AgentCore:
             self.state = "IDLE"
 
     async def _decide_next_action(self, goal, curr_url, curr_title, dom_elements="", context_info=""):
-        """Queries Groq LPU with cognitive policy, DOM context, and user document credentials."""
+        """Queries Groq LPU with cognitive policy, DOM context, multi-turn history, and resume data."""
         # Fast rule-based heuristics for search engines
         if ("google.com" in curr_url or "bing.com" in curr_url) and "search" in goal.lower():
             return {
@@ -775,40 +858,39 @@ class AgentCore:
             }
 
         sys_prompt = (
-            "You are Jarvis-Wormhole, an elite autonomous web navigation and form-filling agent.\n"
-            "Your objective is to examine the web page, understand the user's intent, and execute the exact right sequence of browser actions to achieve the goal without getting stuck or lost.\n\n"
-            "=== COGNITIVE REASONING POLICY ===\n"
-            "1. UNDERSTAND THE USER'S GOAL:\n"
-            "   - Identify what the user wants to accomplish (e.g. 'send a message to the guy', 'search for AI', 'fill out application', 'contact developer').\n"
-            "2. LOCATE WHERE TO GO ON THE WEBSITE:\n"
-            "   - Inspect '=== NAVIGATION & SECTION LINKS ===' and '=== PAGE HEADINGS ==='.\n"
-            "   - If the user wants to send a message / connect / contact:\n"
-            "     * Look for links or buttons labeled 'Connect', 'Contact', 'Initiate Contact', 'Get in Touch', 'Hire Me', 'Message', or href='#connect' / href='#contact'.\n"
-            "     * Single Page Applications (SPAs) keep forms hidden in sections until the section navigation tab is clicked.\n"
-            "   - If input fields are present (even if marked [hidden] in an SPA), use action 'fill_form'. It automatically navigates to and activates the section!\n"
-            "3. FORM FILLING PROTOCOL (action: 'fill_form'):\n"
-            "   - Match the user's attached document / vault profile to the inputs:\n"
-            "     * Name field -> use applicant/user's full name\n"
-            "     * Email field -> use applicant/user's email address\n"
-            "     * Message/Inquiry field -> write a concise, professional message introducing the user and expressing interest to connect or collaborate\n"
-            "   - Specify the submit button (e.g. 'button[type=\"submit\"]' or 'button:has-text(\"Send Message\")').\n"
-            "   - Set 'finish_after': true so the task finishes upon successful submission.\n"
-            "4. LOOP & STUCK PREVENTION:\n"
-            "   - If you already navigated to the section, proceed to fill the form.\n"
-            "   - If a success notice appears in '=== NOTICES ON PAGE ===' or the form was submitted, output 'finish'.\n\n"
-            "=== SUPPORTED ACTIONS (JSON) ===\n"
-            "1. fill_form: {\"action\": \"fill_form\", \"fields\": {\"#form-name\": \"Name\", \"#form-email\": \"email@domain.com\", \"#form-message\": \"Message text...\"}, \"submit_selector\": \"button[type='submit']\", \"finish_after\": true, \"reason\": \"...\"}\n"
-            "2. click: {\"action\": \"click\", \"selector\": \"a[href='#connect']\", \"reason\": \"Opening the Connect section to access the message form.\"}\n"
-            "3. type: {\"action\": \"type\", \"selector\": \"input[name='q']\", \"text\": \"Query\", \"press_enter\": true, \"reason\": \"...\"}\n"
-            "4. navigate: {\"action\": \"navigate\", \"text\": \"https://...\", \"reason\": \"Navigating to website.\"}\n"
-            "5. scroll: {\"action\": \"scroll\", \"reason\": \"Scrolling to find content below the fold.\"}\n"
-            "6. finish: {\"action\": \"finish\", \"reason\": \"Task successfully completed.\"}\n\n"
+            "You are Jarvis-Wormhole, an elite autonomous web navigation, form-filling, and job application agent.\n"
+            "Your objective is to inspect the active web page, understand the user's intent, and execute the exact right sequence of browser actions to achieve the goal.\n\n"
+            "=== COGNITIVE PROTOCOLS ===\n"
+            "1. JOB DESCRIPTION / RESUME SYNTHESIS PROTOCOL:\n"
+            "   - If the user asks to 'add job description', 'describe the job', 'fill description', or 'post job', AND a candidate resume or profile is provided in context:\n"
+            "     * Extract the candidate's core role, domain, technical stack, skills, and qualifications from the uploaded resume.\n"
+            "     * Synthesize a comprehensive, professional, complete Job Description tailored to that role (including Role Overview, Key Responsibilities, Required Skills, and Qualifications).\n"
+            "     * Target the Job Description editor on the page (e.g. `div[contenteditable='true']`, `[role='textbox']`, `textarea[name*='description' i]`, or `[aria-label*='Job description']`).\n"
+            "     * Use action 'fill_form' or 'type' with the complete synthesized job description text to populate the field!\n\n"
+            "2. CONTACT & APPLICATION PROTOCOL:\n"
+            "   - If the user wants to contact, connect, or hire, map name, email, and message into the fields.\n"
+            "   - In Single-Page Applications (SPAs), sections like Contact are often hidden until you click their navigation tab (e.g. `a[href='#connect']`).\n\n"
+            "3. SUPPORTED ACTIONS (JSON):\n"
+            "   1. fill_form: {\"action\": \"fill_form\", \"fields\": {\"field_selector\": \"text_content_to_insert\"}, \"submit_selector\": \"optional_btn\", \"finish_after\": true, \"reason\": \"...\"}\n"
+            "   2. click: {\"action\": \"click\", \"selector\": \"a[href='#...'] or button_selector\", \"reason\": \"...\"}\n"
+            "   3. type: {\"action\": \"type\", \"selector\": \"selector\", \"text\": \"string\", \"press_enter\": false, \"reason\": \"...\"}\n"
+            "   4. navigate: {\"action\": \"navigate\", \"text\": \"https://...\", \"reason\": \"...\"}\n"
+            "   5. scroll: {\"action\": \"scroll\", \"reason\": \"...\"}\n"
+            "   6. finish: {\"action\": \"finish\", \"reason\": \"...\"}\n\n"
             "Always return valid JSON only."
         )
 
+        # Build turn conversation context
+        history_str = ""
+        if len(self.session_history) > 1:
+            history_str = "\n=== PREVIOUS TURNS IN CURRENT CHAT SESSION ===\n"
+            for item in self.session_history[:-1]:
+                history_str += f"{item['role'].upper()}: {item['text']}\n"
+
         user_msg = (
             f"User Goal: {goal}\n\n"
-            f"Attached Document / Candidate Data:\n{context_info}\n\n"
+            f"{history_str}\n"
+            f"Attached Document / Candidate Resume Data:\n{context_info}\n\n"
             f"Current Web Page: {curr_url} ('{curr_title}')\n\n"
             f"Structured DOM Elements on Page:\n{dom_elements}\n"
         )

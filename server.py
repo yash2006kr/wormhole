@@ -188,18 +188,31 @@ async def handle_file_upload(req: Request):
             # Extract plain text if PDF or document
             extracted = extract_file_text(file_dest)
 
-            saved_files.append({
+            file_info = {
                 "name": name,
                 "size": len(raw_bytes),
                 "path": str(file_dest),
                 "url": f"/uploads/{safe_name}",
                 "extracted_text": extracted
-            })
+            }
+            saved_files.append(file_info)
+            agent_core.session_files.append(file_info)
+            if extracted:
+                agent_core.session_context += f"\n--- RESUME / ATTACHED FILE CONTENT ({name}) ---\n{extracted}\n"
             print(f"[FILE UPLOAD] Saved '{name}' ({len(raw_bytes)} bytes, {len(extracted)} text chars) -> {file_dest}")
         return JSONResponse({"status": "SUCCESS", "files": saved_files})
     except Exception as e:
         print(f"[!] Upload error: {e}")
         return JSONResponse({"status": "ERROR", "message": str(e)}, status_code=500)
+
+# ==============================================================================
+# NEW CHAT SESSION RESET ENDPOINT
+# ==============================================================================
+@app.post("/api/chat/new")
+async def create_new_chat():
+    print("\n[SESSION] New Chat created by user. Resetting session memory and files...")
+    agent_core.reset_session()
+    return JSONResponse({"status": "SUCCESS", "message": "New chat initialized."})
 
 # ==============================================================================
 # EMERGENCY ABORT ENDPOINT
@@ -241,14 +254,15 @@ async def execute_agent_command(req: Request):
     t_start = time.time()
     print(f"\n[AGENT SERVER] Received User Command: \"{prompt}\" (Attached Files: {len(attached_files)})")
 
-    # 1. Compile User Profile & Attached Documents Context
-    context_data = ""
+    # 1. Compile User Profile & Attached Documents Context across turns
     for af in attached_files:
         txt = af.get("extracted_text", "")
-        if txt:
-            context_data += f"\n--- ATTACHED FILE CONTENT ({af.get('name')}) ---\n{txt[:4000]}\n"
+        name = af.get("name", "document")
+        if txt and txt not in agent_core.session_context:
+            agent_core.session_context += f"\n--- RESUME / ATTACHED FILE CONTENT ({name}) ---\n{txt}\n"
 
     # Ingest candidate credentials from vault.json as default knowledge
+    context_data = agent_core.session_context
     vault_file = BASE_DIR / "vault.json"
     if vault_file.exists():
         try:
@@ -267,7 +281,7 @@ async def execute_agent_command(req: Request):
             pass
 
     # Store in agent core
-    agent_core.attached_files = attached_files
+    agent_core.attached_files = attached_files or agent_core.session_files
     agent_core.current_context = context_data
 
     # 2. Check if real website navigation / interaction is requested
