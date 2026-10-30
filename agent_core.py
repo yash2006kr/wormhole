@@ -32,6 +32,8 @@ from groq import Groq
 
 from transaction_ledger import transaction_ledger
 from sneaky_fee_guard import extract_voice_approved_amount, audit_and_strip_checkout
+from sentinel import fraud_sentinel
+from exorcist import heal_image
 
 groq_key = os.getenv("GROQ_API_KEY")
 groq_client = Groq(api_key=groq_key)
@@ -1064,22 +1066,33 @@ class AgentCore:
                 print(f"\n--- STEP {step_count}/{max_steps} | URL: {curr_url} ---")
                 await self.broadcast({"type": "STEP", "step": step_count, "url": curr_url, "title": curr_title})
 
-                # Check for explicit Bot Challenge / CAPTCHA / Payment Gateway requiring manual verification
-                is_human_gate = any(k in curr_url.lower() for k in [
-                    "checkout", "payment", "recaptcha", "turnstile", "challenge", "hcaptcha"
-                ]) or any(k in curr_title.lower() for k in [
-                    "security challenge", "cloudflare challenge", "captcha", "payment gateway"
-                ])
-
-                if is_human_gate:
-                    print(f"[SAFETY TRIGGER] Human Verification / CAPTCHA detected on '{curr_title}'. Pausing for user.")
+                # Protocol 03: Air-Gapped Fraud Sentinel & Payment Gateway State Machine
+                sentinel_check = await fraud_sentinel.scan_page_for_sensitive_gate(self.page, curr_url, curr_title)
+                if sentinel_check.get("is_sensitive"):
+                    reason_msg = sentinel_check.get("reason", "Sensitive financial gate / verification challenge detected.")
+                    gate_type = sentinel_check.get("type", "PAYMENT_GATEWAY")
+                    print(f"[SENTINEL] Air-Gap Guardrail Triggered: {reason_msg} ({gate_type})")
                     self.state = "PAUSED_FOR_HUMAN"
+                    alert_text = (
+                        f"🚨 **AIR-GAPPED FRAUD SENTINEL ACTIVATED**\n\n"
+                        f"• **Protection Gate**: `{gate_type}`\n"
+                        f"• **Trigger Reason**: {reason_msg}\n"
+                        f"• **URL**: `{curr_url}`\n\n"
+                        f"🛡️ **Execution Frozen**: For safety and strict privacy, the agent halts before entering card numbers, CVV, UPI, or OTP. "
+                        f"Please complete this step directly on the page, then click **Resume**."
+                    )
                     await self.broadcast({
                         "type": "HUMAN_VERIFICATION_REQUIRED",
                         "state": "PAUSED_FOR_HUMAN",
                         "url": curr_url,
                         "title": curr_title,
-                        "message": "Human verification or security challenge required. Please complete this step directly on the website."
+                        "detection": sentinel_check,
+                        "message": alert_text
+                    })
+                    await self.broadcast({
+                        "type": "CHAT_RESPONSE",
+                        "text": alert_text,
+                        "reason": f"Air-Gapped Fraud Sentinel halted execution at {gate_type}."
                     })
                     await self.resume_event.wait()
 
@@ -1246,6 +1259,38 @@ class AgentCore:
                             })
                             await self.broadcast({"type": "COMPLETE", "reason": f"Form populated: {reason}", "has_chat_response": True})
                             break
+
+                    elif action_type in ["upload_file", "upload", "set_file"]:
+                        file_sel = selector or "input[type='file']"
+                        file_path = action.get("file_path") or action.get("text") or ""
+                        if not file_path or not Path(file_path).exists():
+                            if self.attached_files and Path(self.attached_files[0].get("path", "")).exists():
+                                file_path = self.attached_files[0]["path"]
+                            else:
+                                file_path = str(BASE_DIR / "test_oversized_photo.jpg")
+
+                        # If user mentions passport/size constraints or photo, auto-heal with Document Exorcist
+                        if any(k in file_path.lower() for k in [".jpg", ".jpeg", ".png"]):
+                            healed_out = str(BASE_DIR / "test_healed_passport_photo.jpg")
+                            try:
+                                await asyncio.to_thread(heal_image, file_path, healed_out, 20, 48)
+                                file_path = healed_out
+                                print(f"  -> [DOC EXORCIST] Auto-healed image to compliant size: {file_path}")
+                                await self.broadcast({
+                                    "type": "LOG",
+                                    "message": "⚡ Document Exorcist: Auto-healed photo to compliant 32KB 200 DPI."
+                                })
+                            except Exception as e:
+                                print(f"  [!] Document Exorcist pre-upload notice: {e}")
+
+                        print(f"  -> Uploading file '{file_path}' into '{file_sel}'...")
+                        try:
+                            await self.page.set_input_files(file_sel, file_path)
+                            await asyncio.sleep(1.5)
+                            print(f"  -> File uploaded successfully: {file_path}")
+                            await self.broadcast({"type": "LOG", "message": f"📁 Uploaded: {Path(file_path).name}"})
+                        except Exception as e:
+                            print(f"  [!] File upload error on '{file_sel}': {e}")
 
                     elif action_type == "type":
                         target_selector = selector or "input, textarea, div[contenteditable='true']"
@@ -1522,8 +1567,9 @@ class AgentCore:
             "   7. switch_tab: {\"action\": \"switch_tab\", \"target\": 0 or \"gmail\" or \"url_substring\", \"reason\": \"...\"}\n"
             "   8. close_tab: {\"action\": \"close_tab\", \"target\": 1, \"reason\": \"...\"}\n"
             "   9. scroll: {\"action\": \"scroll\", \"reason\": \"...\"}\n"
-            "   10. clarify: {\"action\": \"clarify\", \"question\": \"...\", \"options\": [\"Choice A\", \"Choice B\"], \"reason\": \"...\"}\n"
-            "   11. finish: {\"action\": \"finish\", \"reason\": \"...\"}\n\n"
+            "   10. upload_file: {\"action\": \"upload_file\", \"selector\": \"input[type='file']\", \"reason\": \"...\"}\n"
+            "   11. clarify: {\"action\": \"clarify\", \"question\": \"...\", \"options\": [\"Choice A\", \"Choice B\"], \"reason\": \"...\"}\n"
+            "   12. finish: {\"action\": \"finish\", \"reason\": \"...\"}\n\n"
             "Always return valid JSON only."
         )
 

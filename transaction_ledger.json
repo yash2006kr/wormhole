@@ -1,3 +1,19 @@
 {
-  "transactions": []
+  "transactions": [
+    {
+      "tx_id": "TX-1793376183428",
+      "idempotency_key": "1b154511199f4764",
+      "status": "IN_FLIGHT_SUBMITTED",
+      "timestamp": "2026-10-30 21:33:03",
+      "url": "http://localhost:8000/mock/checkout",
+      "selector": "#btn-pay",
+      "action_type": "click",
+      "amount": 4650.0,
+      "currency": "INR",
+      "order_id": "ORD-TEST-001",
+      "goal": "Pay for ticket",
+      "reconciled": false,
+      "reconciliation_notes": ""
+    }
+  ]
 }

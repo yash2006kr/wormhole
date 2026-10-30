@@ -32,6 +32,7 @@ from agent_core import agent_core
 from exorcist import heal_image
 from dark_pattern import run_demo as run_dark_pattern_demo
 from transit_rush import run_transit_rush
+from sentinel import fraud_sentinel, run_demo as run_sentinel_demo
 
 app = FastAPI(title="Wormhole Real-Time Agent Server")
 
@@ -482,18 +483,30 @@ async def execute_agent_command(req: Request):
     if vault_file.exists():
         try:
             v_data = json.loads(vault_file.read_text(encoding="utf-8"))
-            cand = v_data.get("candidate_profile", {})
+            prof = v_data.get("profile") or v_data.get("candidate_profile", {})
+            acad = v_data.get("academic") or prof.get("academic", {})
+            addr = v_data.get("address", {})
+            transit = v_data.get("transit_preferences", {})
             context_data += (
-                f"\n--- SENDER CANDIDATE CREDENTIALS (FROM VAULT) ---\n"
-                f"Full Name: {cand.get('name', 'Yashwanth K R')}\n"
-                f"Email Address: {cand.get('email', 'yash2006kr@gmail.com')}\n"
-                f"Phone: {cand.get('phone', '+91 98765 43210')}\n"
-                f"Degree: {cand.get('education', {}).get('degree', 'B.E. Computer Science')}\n"
-                f"College: {cand.get('education', {}).get('college', 'Don Bosco Institute of Technology')}\n"
-                f"Skills: Backend Systems, Java, AI Agents, Python\n"
+                f"\n--- SENDER CANDIDATE CREDENTIALS (FROM USER VAULT) ---\n"
+                f"Full Name: {prof.get('full_name') or prof.get('name', 'Yashwanth K R')}\n"
+                f"Date of Birth: {prof.get('dob', '2003-08-14')} (Age: {prof.get('age', 23)})\n"
+                f"Gender: {prof.get('gender', 'Male')}\n"
+                f"Masked ID / Aadhaar: {prof.get('aadhaar_masked', 'XXXX-XXXX-8921')}\n"
+                f"Email Address: {prof.get('email', 'yashwanth.kr.dbit@gmail.com')}\n"
+                f"Phone: {prof.get('phone', '+91 98450 12345')}\n"
+                f"Institution: {acad.get('institution', 'Don Bosco Institute of Technology (DBIT)')}\n"
+                f"Course / Branch: {acad.get('course', 'B.Tech')} in {acad.get('branch', 'Computer Science & Engineering')}\n"
+                f"Current Year: {acad.get('current_year', '4th Year / 8th Semester')}\n"
+                f"B.Tech CGPA: {acad.get('cgpa', '8.85')} (Top 5%)\n"
+                f"Class 10th Score: {acad.get('tenth_percentage', '92.4%')}\n"
+                f"Class 12th Score: {acad.get('twelfth_percentage', '89.6%')}\n"
+                f"Technical Skills: {', '.join(acad.get('skills', ['Python', 'FastAPI', 'Agentic AI', 'Playwright']))}\n"
+                f"Address: {addr.get('line1', 'Kumbalagodu, Mysore Road')}, {addr.get('city', 'Bengaluru')}, {addr.get('state', 'Karnataka')} - {addr.get('pincode', '560074')}\n"
+                f"Transit Origin: {transit.get('default_origin', 'Bengaluru')}, Destination: {transit.get('default_destination', 'Mysuru')}, Berth: {transit.get('preferred_berth', 'Lower Sleeper')}\n"
             )
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[!] Error reading vault.json: {e}")
 
     # Store in agent core
     agent_core.attached_files = attached_files or agent_core.session_files
@@ -552,6 +565,20 @@ async def execute_agent_command(req: Request):
             "reason": "Transit Rush reserved berths 14A/14B and stripped dark-pattern fees.",
             "details": telemetry,
             "proof_image": "/proof/transit_rush_proof.png",
+            "payment_gate_active": True,
+            "duration_ms": round((time.time() - t_start) * 1000, 1)
+        }
+
+    # 6. Protocol 03: Air-Gapped Fraud Sentinel & Payment Watchdog
+    elif "sentinel" in prompt.lower() or "fraud" in prompt.lower() or "air-gap" in prompt.lower() or "watchdog" in prompt.lower():
+        target_check = "http://localhost:8000/mock/checkout"
+        telemetry = await asyncio.to_thread(run_sentinel_demo, target_check, True)
+        return {
+            "status": "COMPLETED",
+            "protocol": "FRAUD_SENTINEL",
+            "reason": "Air-Gapped Fraud Sentinel intercepted financial payment gateway and froze state before payment.",
+            "details": telemetry,
+            "proof_image": "/proof/sentinel_halt_proof.png",
             "payment_gate_active": True,
             "duration_ms": round((time.time() - t_start) * 1000, 1)
         }

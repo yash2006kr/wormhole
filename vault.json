@@ -8,7 +8,8 @@
     "gender": "Male",
     "dob": "2003-08-14",
     "age": 23,
-    "aadhaar_masked": "XXXX-XXXX-8921"
+    "aadhaar_masked": "XXXX-XXXX-8921",
+    "sample_photo": "test_oversized_photo.jpg"
   },
   "academic": {
     "institution": "Don Bosco Institute of Technology (DBIT)",

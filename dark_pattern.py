@@ -99,8 +99,11 @@ def strip_dark_patterns(page):
 
 
 def run_demo(mock_html_path="mock_checkout.html", headless=True):
-    abs_path = os.path.abspath(mock_html_path)
-    file_url = f"file:///{abs_path.replace(os.sep, '/')}"
+    if mock_html_path.startswith("http"):
+        file_url = mock_html_path
+    else:
+        abs_path = os.path.abspath(mock_html_path)
+        file_url = f"file:///{abs_path.replace(os.sep, '/')}"
     
     print(f"=== TESTING PROTOCOL 05: ANTI-DARK-PATTERN STRIPPER ===")
     print(f"Target Checkout Page: {file_url}")
