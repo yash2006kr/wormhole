@@ -215,7 +215,12 @@ class MultiKeyAPIPool:
                     err_text = str(e)
                     print(f"[API POOL] ⚠️ Rate limit on Key #{key_status.index} for model '{model_name}': {err_text[:120]}")
                     
-                    # If error is specific to this model (e.g. TPD or model limit), try next model on same key first
+                    # If organization-wide tokens per day (TPD) is hit, fail over immediately to zero-token engine
+                    if "tokens per day" in err_text.lower() or "tpd" in err_text.lower():
+                        print("[API POOL] Organization daily token limit reached. Failing over immediately to zero-token autonomous engine...")
+                        return None
+
+                    # If error is specific to this model, try next model on same key first
                     if "model `" in err_text or "for model" in err_text:
                         print(f"[API POOL] Model-specific limit detected. Trying next backup model on Key #{key_status.index}...")
                         continue
