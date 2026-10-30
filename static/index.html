@@ -27,10 +27,12 @@ body:before{content:"";position:fixed;inset:-20%;pointer-events:none;background:
 .btn-new-chat:hover{background:linear-gradient(135deg,rgba(121,232,243,0.3),rgba(163,140,255,0.3));border-color:var(--cyan);color:#fff;box-shadow:0 0 10px rgba(121,232,243,0.25)}
 
 /* HERO CONTAINER (ROBOT/ORB + 'WHERE TO CAPTAIN') FILLS SPACE IN EMPTY STATE, VANISHES ONCE PROMPTED */
-.hero-container{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0;position:relative;margin:0;transition:all .3s ease;overflow:hidden}
+.hero-container{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0;position:relative;margin:0;opacity:1;transition:opacity .3s cubic-bezier(0.4,0,0.2,1),transform .3s cubic-bezier(0.4,0,0.2,1);overflow:hidden}
+.hero-container.fade-out{opacity:0;transform:scale(.95) translateY(-6px);pointer-events:none}
 
 /* CONVERSATION FEED FILLS THE ENTIRE HERO SPACE ONCE PROMPTED */
-.chat-history-feed{flex:1;min-height:0;height:auto;max-height:none;overflow-y:auto;display:flex;flex-direction:column;gap:7px;margin-bottom:8px;padding:10px 12px;background:rgba(9,11,22,0.85);border:1px solid rgba(155,170,255,0.18);border-radius:12px;position:relative;z-index:1;scroll-behavior:smooth}
+.chat-history-feed{flex:1;min-height:0;height:auto;max-height:none;overflow-y:auto;display:flex;flex-direction:column;gap:7px;margin-bottom:8px;padding:10px 12px;background:rgba(9,11,22,0.85);border:1px solid rgba(155,170,255,0.18);border-radius:12px;position:relative;z-index:1;scroll-behavior:smooth;animation:feedFadeIn .3s cubic-bezier(0.4,0,0.2,1)}
+@keyframes feedFadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
 .chat-history-feed::-webkit-scrollbar{width:4px}.chat-history-feed::-webkit-scrollbar-thumb{background:#2a2e4d;border-radius:2px}
 .chat-bubble{padding:6px 9px;border-radius:8px;font-size:11px;line-height:1.45;word-break:break-word}
 .chat-bubble.user{background:rgba(163,140,255,0.15);border:1px solid rgba(163,140,255,0.3);color:#ede9fe;align-self:flex-end;max-width:92%}
@@ -917,11 +919,25 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
       } catch(e) {}
     }
 
+    let hasConversationStarted = false;
+
     function showChatAndHideHero() {
       const hero = document.getElementById("hero-container");
       const feed = document.getElementById("chat-history-feed");
-      if (hero) hero.style.display = "none";
-      if (feed) feed.style.display = "flex";
+      hasConversationStarted = true;
+      if (hero && hero.style.display !== "none") {
+        hero.classList.add("fade-out");
+        setTimeout(() => {
+          hero.style.display = "none";
+          hero.classList.remove("fade-out");
+          if (feed) {
+            feed.style.display = "flex";
+            feed.scrollTop = feed.scrollHeight;
+          }
+        }, 220);
+      } else {
+        if (feed) feed.style.display = "flex";
+      }
     }
 
     function showThinkingIndicator() {
@@ -998,6 +1014,9 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
       }
       const hero = document.getElementById("hero-container");
       if (hero) {
+        hero.classList.remove("fade-out");
+        hero.style.opacity = "1";
+        hero.style.transform = "none";
         hero.style.display = "flex";
         const isVoice = (inputMode === "voice");
         const botScene = document.getElementById("bot-scene");
@@ -1005,7 +1024,7 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
         if (botScene) botScene.style.display = isVoice ? "none" : "flex";
         if (voiceStage) voiceStage.style.display = isVoice ? "flex" : "none";
       }
-      log("[NEW CHAT] Clean session initialized. Live web viewport cleared to null.", "warn");
+      console.log("[NEW CHAT] Clean session initialized. Live web viewport cleared to null.");
       updateAgentState("IDLE");
       try {
         await fetch("/api/chat/new", { method: "POST" });
@@ -1138,11 +1157,13 @@ input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;b
     // INLINE CHAT TELEMETRY LOGGING (STREAMED DIRECTLY INSIDE CONVERSATION FEED)
     // =========================================================================
     function log(msg, type="normal") {
+      console.log(`[TELEMETRY] ${msg}`);
+      // Only stream logs to chat feed once the user has initiated the conversation
+      if (!hasConversationStarted) {
+        return;
+      }
       const feed = document.getElementById("chat-history-feed");
       if (!feed) return;
-
-      // Ensure chat feed is active when logging events
-      showChatAndHideHero();
 
       let timeStr = new Date().toTimeString().split(' ')[0];
       let item = document.createElement("div");
