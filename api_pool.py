@@ -147,8 +147,9 @@ class MultiKeyAPIPool:
         messages: List[Dict[str, str]],
         models: Optional[List[str]] = None,
         temperature: float = 0.1,
+        max_tokens: int = 350,
         response_format: Optional[Dict[str, str]] = None
-    ) -> Dict[str, Any]:
+    ) -> Optional[Dict[str, Any]]:
         """
         Executes Groq chat completion with multi-key failover and multi-model fallback.
         Ensures the agent never hangs or gets stuck on rate limits.
@@ -182,7 +183,8 @@ class MultiKeyAPIPool:
                     kwargs = {
                         "model": model_name,
                         "messages": messages,
-                        "temperature": temperature
+                        "temperature": temperature,
+                        "max_tokens": max_tokens
                     }
                     if response_format:
                         kwargs["response_format"] = response_format
@@ -190,8 +192,18 @@ class MultiKeyAPIPool:
                     res = client.chat.completions.create(**kwargs)
                     elapsed = round((time.time() - t0) * 1000, 1)
 
-                    content = res.choices[0].message.content
-                    parsed = json.loads(content)
+                    content = (res.choices[0].message.content or "{}").strip()
+                    clean_content = content
+                    if "```json" in clean_content:
+                        clean_content = clean_content.split("```json")[1].split("```")[0].strip()
+                    elif "```" in clean_content:
+                        clean_content = clean_content.split("```")[1].split("```")[0].strip()
+                    try:
+                        parsed = json.loads(clean_content)
+                    except Exception:
+                        match = re.search(r'"action"\s*:\s*"([^"]+)"', clean_content)
+                        act = match.group(1) if match else "respond"
+                        parsed = {"action": act, "message": clean_content, "reason": "Model response."}
                     if isinstance(parsed, list):
                         parsed = parsed[0] if len(parsed) > 0 else {"action": "finish", "reason": "Empty action"}
 
@@ -240,13 +252,8 @@ class MultiKeyAPIPool:
 
         print(f"[API POOL] ⚠️ Multi-key/model pool engaged fallback after {attempt_count} attempts. Last error: {last_error}")
         
-        # Resilient graceful fallback: Never crash the agent or show raw error trace to user!
-        return {
-            "action": "respond",
-            "message": "I'm online and ready. I navigated to the destination page and I'm prepared for your next command. How would you like me to proceed?",
-            "reason": "Graceful cognitive fallback recovery.",
-            "finish": True
-        }
+        # Multi-key pool exhausted: return None to allow agent_core to engage autonomous local heuristics
+        return None
 
     def get_telemetry(self) -> Dict[str, Any]:
         """Returns structured telemetry for dashboard / judges."""
