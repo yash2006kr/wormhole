@@ -1,9 +1,10 @@
 import { useState, lazy, Suspense } from "react";
 import "./App.css";
 import Cursor from "./components/Cursor";
+import Navbar from "./components/Navbar";
+import Landing from "./components/Landing";
 
 const CharacterModel = lazy(() => import("./components/Character"));
-const MainContainer = lazy(() => import("./components/MainContainer"));
 const AgentWorkspace = lazy(() => import("./components/AgentWorkspace/AgentWorkspace"));
 import { LoadingProvider } from "./context/LoadingProvider";
 
@@ -19,12 +20,12 @@ const App = () => {
     setActiveTheme(mode);
     if (file) setAttachedFile(file);
 
-    // Trigger smooth fade out transition of the hero scene
+    // Fade out the initial search bar and reveal the transparent glass workspace cards
     setIsTransitioning(true);
     setTimeout(() => {
       setHasStarted(true);
       setIsTransitioning(false);
-    }, 450);
+    }, 350);
   };
 
   const handleResetToHero = () => {
@@ -40,27 +41,38 @@ const App = () => {
       <Cursor />
 
       <LoadingProvider>
-        <Suspense fallback={<div className="loading-fallback" />}>
-          {!hasStarted ? (
-            <MainContainer
-              onPromptSubmit={handlePromptSubmit}
-              isTransitioningOut={isTransitioning}
-            >
-              <Suspense fallback={null}>
-                <CharacterModel />
-              </Suspense>
-            </MainContainer>
-          ) : (
-            <Suspense fallback={<div className="workspace-loading">Initializing Wormhole Cockpit...</div>}>
-              <AgentWorkspace
-                initialPrompt={activePrompt}
-                initialFile={attachedFile}
-                theme={activeTheme}
-                onReset={handleResetToHero}
-              />
+        <div className="app-main-viewport">
+          {/* Ambient Lighting & Flares */}
+          <Navbar />
+
+          {/* PERMANENT 3D HUMANOID ROBOT BACKGROUND - NEVER VANISHES, NEVER UNMOUNTS */}
+          <div className="app-permanent-robot-bg">
+            <Suspense fallback={null}>
+              <CharacterModel />
             </Suspense>
+          </div>
+
+          {/* INITIAL SCREEN LAYER: ASK ANYTHING SEARCH BAR & HERO OVERLAY */}
+          {!hasStarted && (
+            <div className={`initial-hero-overlay ${isTransitioning ? "search-bar-fade-out" : ""}`}>
+              <Landing onPromptSubmit={handlePromptSubmit} isTransitioningOut={isTransitioning} />
+            </div>
           )}
-        </Suspense>
+
+          {/* WORKSPACE COCKPIT: TRANSLUCENT GLASS CARDS FADING IN OVER ROBOT */}
+          {hasStarted && (
+            <div className="workspace-glass-layer">
+              <Suspense fallback={<div className="workspace-loading">Initializing Wormhole Cockpit...</div>}>
+                <AgentWorkspace
+                  initialPrompt={activePrompt}
+                  initialFile={attachedFile}
+                  theme={activeTheme}
+                  onReset={handleResetToHero}
+                />
+              </Suspense>
+            </div>
+          )}
+        </div>
       </LoadingProvider>
     </>
   );

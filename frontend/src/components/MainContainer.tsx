@@ -11,9 +11,8 @@ const MainContainer = ({ children, onPromptSubmit, isTransitioningOut }: MainCon
   return (
     <div className="container-main">
       <Navbar />
-      <Landing onPromptSubmit={onPromptSubmit} isTransitioningOut={isTransitioningOut}>
-        {children}
-      </Landing>
+      {children}
+      <Landing onPromptSubmit={onPromptSubmit} isTransitioningOut={isTransitioningOut} />
     </div>
   );
 };

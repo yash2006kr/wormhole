@@ -1,14 +1,14 @@
-import { PropsWithChildren, useState } from "react";
+import { useState } from "react";
 import "./styles/Landing.css";
 import AISearchBar from "./AISearchBar/AISearchBar";
 import VoiceHeroStage from "./VoiceHero/VoiceHeroStage";
 
-interface LandingProps extends PropsWithChildren {
+interface LandingProps {
   onPromptSubmit?: (query: string, mode: "purple" | "blue", attachedFile?: File | null) => void;
   isTransitioningOut?: boolean;
 }
 
-const Landing = ({ children, onPromptSubmit, isTransitioningOut = false }: LandingProps) => {
+const Landing = ({ onPromptSubmit, isTransitioningOut = false }: LandingProps) => {
   const [heroMode, setHeroMode] = useState<"text" | "voice">("text");
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
 
@@ -28,12 +28,9 @@ const Landing = ({ children, onPromptSubmit, isTransitioningOut = false }: Landi
 
   return (
     <div className={`landing-section ${isTransitioningOut ? "landing-transition-out" : ""}`} id="landingDiv">
-      {/* 1. TEXT MODE: 3D ROBOT HERO */}
-      <div className={`hero-scene-wrapper ${heroMode === "text" ? "active" : "inactive"}`}>
-        {children}
-
-        {/* GLOWING AI SEARCH BAR AT BOTTOM (ONLY IN TEXT MODE) */}
-        {heroMode === "text" && (
+      {/* 1. TEXT MODE: BOTTOM GLOWING AI SEARCH BAR */}
+      {heroMode === "text" && (
+        <div className="hero-search-wrapper">
           <AISearchBar
             theme="purple"
             title="WHAT'S ON YOUR MIND?"
@@ -42,8 +39,8 @@ const Landing = ({ children, onPromptSubmit, isTransitioningOut = false }: Landi
             onSearch={handleTextSearchSubmit}
             onEnterVoiceMode={() => setHeroMode("voice")}
           />
-        )}
-      </div>
+        </div>
+      )}
 
       {/* 2. FULL VOICE MODE: WORMHOLE VOICE ORB FROM SCREENSHOT (NO TEXT BAR) */}
       {heroMode === "voice" && (
