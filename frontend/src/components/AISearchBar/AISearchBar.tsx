@@ -32,6 +32,18 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const micRecognitionRef = useRef<any>(null);
 
+  // Up/Down Arrow Prompt History (Terminal & Modern AI Chatbot style)
+  const [promptHistory, setPromptHistory] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("wh_prompt_history");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
+  const tempDraftRef = useRef<string>("");
+
   useEffect(() => {
     if (initialValue) {
       setQuery(initialValue);
@@ -44,9 +56,23 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
 
   const handleSend = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!query.trim() && !attachedFileName) return;
+    const textToSend = query.trim();
+    if (!textToSend && !attachedFileName) return;
+
+    if (textToSend) {
+      setPromptHistory((prev) => {
+        const next = [...prev.filter((p) => p !== textToSend), textToSend];
+        try {
+          localStorage.setItem("wh_prompt_history", JSON.stringify(next.slice(-60)));
+        } catch {}
+        return next;
+      });
+      setHistoryIndex(-1);
+      tempDraftRef.current = "";
+    }
+
     if (onSearch) {
-      onSearch(query.trim());
+      onSearch(textToSend);
       setQuery("");
       setAttachedFileName(null);
     }
@@ -232,6 +258,32 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   handleSend();
+                } else if (e.key === "ArrowUp") {
+                  // Up arrow: recall previous prompt
+                  if (promptHistory.length === 0) return;
+                  e.preventDefault();
+                  if (historyIndex === -1) {
+                    tempDraftRef.current = query;
+                    const nextIdx = promptHistory.length - 1;
+                    setHistoryIndex(nextIdx);
+                    setQuery(promptHistory[nextIdx]);
+                  } else if (historyIndex > 0) {
+                    const nextIdx = historyIndex - 1;
+                    setHistoryIndex(nextIdx);
+                    setQuery(promptHistory[nextIdx]);
+                  }
+                } else if (e.key === "ArrowDown") {
+                  // Down arrow: cycle toward newer prompts or restore draft
+                  if (historyIndex === -1) return;
+                  e.preventDefault();
+                  if (historyIndex < promptHistory.length - 1) {
+                    const nextIdx = historyIndex + 1;
+                    setHistoryIndex(nextIdx);
+                    setQuery(promptHistory[nextIdx]);
+                  } else {
+                    setHistoryIndex(-1);
+                    setQuery(tempDraftRef.current || "");
+                  }
                 }
               }}
             />

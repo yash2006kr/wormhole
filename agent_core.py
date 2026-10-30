@@ -1444,6 +1444,28 @@ class AgentCore:
                             await self.page.keyboard.press("Enter")
                         await asyncio.sleep(1)
 
+                        if action.get("press_enter") or action.get("finish") or action.get("message"):
+                            comp_msg = action.get("message") or f"✅ Entered: '{text_val}'."
+                            opts = action.get("options") or self._generate_context_options(curr_url, self.current_goal, comp_msg)
+                            self.session_history.append({
+                                "role": "agent",
+                                "text": comp_msg,
+                                "options": opts,
+                                "time": time.strftime("%H:%M:%S")
+                            })
+                            await self.broadcast({
+                                "type": "CHAT_RESPONSE",
+                                "text": comp_msg,
+                                "options": opts,
+                                "reason": reason
+                            })
+                            await self.broadcast({
+                                "type": "COMPLETE",
+                                "reason": reason,
+                                "has_chat_response": True
+                            })
+                            break
+
                     elif action_type == "click":
                         raw_sel = selector or text_val
                         print(f"  -> Clicking element: {raw_sel}")
@@ -1523,7 +1545,32 @@ class AgentCore:
                             })
 
                         await self._smart_click(raw_sel, text=text_val)
-                        await asyncio.sleep(1.5)
+                        await asyncio.sleep(1.2)
+
+                        # Once an immediate click/toggle intent is performed, finish cleanly to save rate limits
+                        if action.get("finish") or action.get("message") or any(k in self.current_goal.lower() for k in [
+                            "click", "fullscreen", "play", "pause", "toggle", "select", "next", "video", "song", "view", "watch"
+                        ]):
+                            comp_msg = action.get("message") or f"✅ Executed: **{reason or 'Clicked element'}**."
+                            opts = action.get("options") or self._generate_context_options(curr_url, self.current_goal, comp_msg)
+                            self.session_history.append({
+                                "role": "agent",
+                                "text": comp_msg,
+                                "options": opts,
+                                "time": time.strftime("%H:%M:%S")
+                            })
+                            await self.broadcast({
+                                "type": "CHAT_RESPONSE",
+                                "text": comp_msg,
+                                "options": opts,
+                                "reason": reason
+                            })
+                            await self.broadcast({
+                                "type": "COMPLETE",
+                                "reason": reason,
+                                "has_chat_response": True
+                            })
+                            break
 
                         if is_payment_click and in_flight_tx:
                             # If page survived and didn't crash, mark settled
@@ -1656,6 +1703,99 @@ class AgentCore:
                 "press_enter": True,
                 "reason": f"Typing search query '{search_text}' into Google."
             }
+
+        # 2.5. YouTube Portal & Player Controller Ready
+        if "youtube.com" in curr_url.lower():
+            p_goal_lower = clean_goal.lower()
+            
+            # Sub-case A: Fullscreen
+            if any(k in p_goal_lower for k in ["fullscreen", "full screen", "maximize", "theatre", "theater"]):
+                return {
+                    "action": "click",
+                    "selector": "button.ytp-fullscreen-button, button[aria-label*='Full screen'], [title*='Full screen']",
+                    "reason": "Toggling fullscreen on YouTube player.",
+                    "finish": True,
+                    "message": "🖥️ **Fullscreen Toggled**: YouTube player switched to fullscreen mode.",
+                    "options": [
+                        "▶️ Play/Pause Video",
+                        "⏭️ Next Video",
+                        "🔍 Search Another Song",
+                        "📺 Exit Fullscreen"
+                    ]
+                }
+
+            # Sub-case B: Play / Pause
+            elif any(k in p_goal_lower for k in ["play", "pause", "resume", "start", "stop video"]):
+                return {
+                    "action": "click",
+                    "selector": "button.ytp-play-button, .video-stream, button[aria-label*='Play'], button[aria-label*='Pause']",
+                    "reason": "Toggling playback on YouTube player.",
+                    "finish": True,
+                    "message": "▶️ **Playback Toggled**: YouTube video playback active.",
+                    "options": [
+                        "⏸️ Pause Playback",
+                        "📺 Fullscreen View",
+                        "⏭️ Next Video",
+                        "🔍 Search Specific Song"
+                    ]
+                }
+
+            # Sub-case C: Search Specific Song / Query
+            elif any(k in p_goal_lower for k in ["search specific song", "search song", "search video", "search for"]):
+                search_q = clean_goal
+                for pfx in ["search specific song", "search song", "search for", "search", "play"]:
+                    if search_q.lower().startswith(pfx):
+                        search_q = search_q[len(pfx):].strip(": -")
+                        break
+                
+                if search_q and len(search_q) > 2 and search_q.lower() not in ["song", "specific song", "video"]:
+                    import urllib.parse
+                    return {
+                        "action": "navigate",
+                        "url": f"https://www.youtube.com/results?search_query={urllib.parse.quote_plus(search_q)}",
+                        "reason": f"Searching YouTube for '{search_q}'",
+                        "finish": True,
+                        "message": f"🔍 **Searching YouTube** for '{search_q}'.",
+                        "options": [
+                            "▶️ Play First Result",
+                            "🎧 Add to Queue",
+                            "📺 Fullscreen View",
+                            "🔍 Different Search"
+                        ]
+                    }
+                else:
+                    return {
+                        "action": "respond",
+                        "message": (
+                            "🔍 **YouTube Search Ready**\n\n"
+                            "Which song, artist, or genre would you like to search on YouTube?\n\n"
+                            "Pick one of the trending choices below or type any song title!"
+                        ),
+                        "options": [
+                            "🎵 Play Arijit Singh Hits",
+                            "⚡ Play Alan Walker EDM",
+                            "🎹 Relaxing Lofi Hip Hop",
+                            "🔥 Trending Top Songs"
+                        ],
+                        "reason": "Awaiting specific song name for YouTube search.",
+                        "finish": True
+                    }
+
+            # Sub-case D: Add to queue / Next video
+            elif any(k in p_goal_lower for k in ["next", "queue", "add to queue", "skip"]):
+                return {
+                    "action": "click",
+                    "selector": "a.ytp-next-button, button[aria-label*='Next'], ytd-compact-video-renderer a#thumbnail",
+                    "reason": "Advancing to next video on YouTube.",
+                    "finish": True,
+                    "message": "⏭️ **Next Track**: Loaded next video in queue.",
+                    "options": [
+                        "⏸️ Pause Playback",
+                        "📺 Fullscreen View",
+                        "🔍 Search Specific Song",
+                        "🔁 Replay"
+                    ]
+                }
 
         # 2. Fast Heuristic: AbhiBus Portal Ready
         if "abhibus.com" in curr_url.lower():

@@ -205,9 +205,8 @@ class OpenRouterProvider:
         self.models = [
             "nvidia/nemotron-3.5-lightning:free",
             "google/gemma-4-26b-a4b-it:free",
-            "liquid/lfm-2.5-2.6b:free",
             "recursive/flint-v1.0:free",
-            "meta-llama/llama-3.3-70b-instruct:free"
+            "liquid/lfm-2.5-2.6b:free"
         ]
         if self.api_key:
             print("[API POOL] Initialized OpenRouter Free Tier Provider.")
@@ -436,11 +435,9 @@ class MultiKeyAPIPool:
                         return parsed
                 except RateLimitError as e:
                     err_text = str(e)
-                    print(f"[API POOL] [!WARN] Groq Rate limit on Key #{key_status.index}: {err_text[:100]}")
-                    if "tokens per day" in err_text.lower() or "tpd" in err_text.lower():
-                        break
-                    key_status.mark_rate_limit(cooldown_seconds=45.0, err_msg=err_text[:80])
-                    break
+                    print(f"[API POOL] [!WARN] Groq Rate limit on Key #{key_status.index} ({model_name}): {err_text[:100]}")
+                    # Try next available model for this key before quarantining the key
+                    continue
                 except APIError as e:
                     err_text = str(e)
                     if "401" in err_text or "invalid" in err_text.lower():
