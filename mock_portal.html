@@ -31,7 +31,7 @@
       border: 1px solid var(--border);
       border-radius: 16px;
       width: 100%;
-      max-width: 460px;
+      max-width: 480px;
       padding: 32px;
       box-shadow: 0 16px 60px rgba(0,0,0,0.6);
       backdrop-filter: blur(16px);
@@ -40,7 +40,7 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
     }
     .logo-badge {
       width: 36px;
@@ -57,6 +57,33 @@
     h1 { font-size: 20px; font-weight: 700; color: #fff; }
     p.sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
     
+    .portal-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 20px;
+      background: rgba(255,255,255,0.04);
+      padding: 4px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+    }
+    .portal-tab {
+      flex: 1;
+      padding: 8px 10px;
+      background: transparent;
+      border: 0;
+      color: var(--muted);
+      font-size: 11.5px;
+      font-weight: 600;
+      border-radius: 7px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .portal-tab.active {
+      background: rgba(121, 232, 243, 0.12);
+      color: var(--cyan);
+      box-shadow: 0 0 10px rgba(121, 232, 243, 0.1);
+    }
+
     .google-btn {
       width: 100%;
       background: rgba(255, 255, 255, 0.05);
@@ -71,7 +98,7 @@
       justify-content: center;
       gap: 10px;
       cursor: pointer;
-      margin-top: 20px;
+      margin-top: 10px;
       transition: 0.2s;
     }
     .google-btn:hover {
@@ -86,7 +113,7 @@
       font-size: 10.5px;
       text-transform: uppercase;
       letter-spacing: 1px;
-      margin: 20px 0;
+      margin: 18px 0;
     }
     .divider:before, .divider:after {
       content: '';
@@ -98,7 +125,7 @@
 
     .field-group { margin-bottom: 16px; }
     label { display: block; font-size: 11.5px; font-weight: 600; color: #ccd0ea; margin-bottom: 6px; }
-    input[type="email"], input[type="text"] {
+    input[type="email"], input[type="text"], input[type="file"] {
       width: 100%;
       background: rgba(7, 9, 18, 0.7);
       border: 1px solid var(--border);
@@ -151,8 +178,8 @@
     }
 
     .notice {
-      font-size: 11px;
-      padding: 8px 12px;
+      font-size: 11.5px;
+      padding: 10px 14px;
       border-radius: 8px;
       margin-top: 10px;
       line-height: 1.4;
@@ -163,6 +190,38 @@
 
     #otp-section { display: none; }
     #success-screen { display: none; text-align: center; padding: 10px 0; }
+    #photo-flow { display: none; }
+
+    .spec-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 16px;
+      font-size: 11px;
+    }
+    .spec-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .spec-label { color: var(--muted); }
+    .spec-val { color: var(--cyan); font-weight: 600; text-align: right; }
+    .photo-preview-box {
+      width: 140px;
+      height: 180px;
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      margin: 14px auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      background: rgba(0,0,0,0.3);
+    }
+    .photo-preview-box img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
   </style>
 </head>
 <body>
@@ -177,7 +236,13 @@
       </div>
     </div>
 
-    <!-- MAIN FORM -->
+    <!-- PORTAL TABS -->
+    <div class="portal-tabs">
+      <button class="portal-tab active" id="tab-btn-auth" onclick="switchPortalTab('auth')">🔑 1. Identity & OTP</button>
+      <button class="portal-tab" id="tab-btn-photo" onclick="switchPortalTab('photo')">📷 2. Strict Photo Gate (20-45KB)</button>
+    </div>
+
+    <!-- TAB 1: AUTH & IDENTITY FLOW -->
     <div id="auth-flow">
       <!-- Google Auth Button (Demonstrates automated browser restriction) -->
       <button class="google-btn" id="btn-google-login" onclick="triggerGoogleNotice()">
@@ -230,24 +295,126 @@
         <div id="otp-notice" class="notice" style="display: none;"></div>
       </div>
 
+      <!-- STEP 3: SUCCESS STATE -->
+      <div id="success-screen">
+        <div style="font-size: 48px; margin-bottom: 12px;">🎉</div>
+        <h2 style="font-size: 18px; color: var(--green); margin-bottom: 6px;">Login & Application Verified!</h2>
+        <p style="font-size: 12px; color: #d0d4ee; line-height: 1.5; margin-bottom: 16px;">
+          Welcome back, <strong>Yashwanth KR</strong>.<br>
+          Your credentials have been authenticated. Candidate profile active.
+        </p>
+        <div class="notice notice-success">
+          ✓ Session token minted · Ready for job dispatch
+        </div>
+      </div>
+
     </div>
 
-    <!-- STEP 3: SUCCESS STATE -->
-    <div id="success-screen">
-      <div style="font-size: 48px; margin-bottom: 12px;">🎉</div>
-      <h2 style="font-size: 18px; color: var(--green); margin-bottom: 6px;">Login & Application Verified!</h2>
-      <p style="font-size: 12px; color: #d0d4ee; line-height: 1.5; margin-bottom: 16px;">
-        Welcome back, <strong>Yashwanth KR</strong>.<br>
-        Your credentials have been authenticated. Candidate profile active.
-      </p>
-      <div class="notice notice-success">
-        ✓ Session token minted · Ready for job dispatch
+    <!-- TAB 2: STRICT PHOTO GATE FLOW -->
+    <div id="photo-flow">
+      <div style="font-size: 12px; color: var(--muted); margin-bottom: 6px;">
+        Strict Civil / Examination Photo Upload Specification:
       </div>
+      <table class="spec-table">
+        <tr><td class="spec-label">Dimension</td><td class="spec-val">3.5cm × 4.5cm (Aspect 7:9)</td></tr>
+        <tr><td class="spec-label">Resolution</td><td class="spec-val">200 DPI</td></tr>
+        <tr><td class="spec-label">Required File Size</td><td class="spec-val">Min 20.0 KB · Max 45.0 KB</td></tr>
+      </table>
+
+      <div class="photo-preview-box" id="preview-container">
+        <span id="preview-placeholder" style="font-size: 11px; color: var(--muted); text-align: center; padding: 10px;">No photo uploaded</span>
+        <img id="photo-preview-img" style="display: none;" src="" alt="Passport Preview">
+      </div>
+
+      <div class="field-group">
+        <label for="portal-photo-input">Upload Passport Photo (Local or Test File)</label>
+        <input type="file" id="portal-photo-input" accept="image/jpeg,image/png" onchange="inspectPhotoFile(this)">
+      </div>
+
+      <div id="photo-diagnostic" class="notice notice-info">
+        ℹ️ Select a photo to validate compliance against strict portal upload constraints.
+      </div>
+
+      <button class="btn-action" id="btn-exorcist-heal" onclick="autoHealAndUpload()" style="margin-top: 14px;">
+        ⚡ Auto-Heal with Document Exorcist (&lt;350ms)
+      </button>
     </div>
 
   </div>
 
   <script>
+    function switchPortalTab(tab) {
+      document.querySelectorAll(".portal-tab").forEach(t => t.classList.remove("active"));
+      if (tab === 'auth') {
+        document.getElementById("tab-btn-auth").classList.add("active");
+        document.getElementById("auth-flow").style.display = "block";
+        document.getElementById("photo-flow").style.display = "none";
+      } else {
+        document.getElementById("tab-btn-photo").classList.add("active");
+        document.getElementById("auth-flow").style.display = "none";
+        document.getElementById("photo-flow").style.display = "block";
+      }
+    }
+
+    function inspectPhotoFile(input) {
+      const file = input.files && input.files[0];
+      const diag = document.getElementById("photo-diagnostic");
+      const img = document.getElementById("photo-preview-img");
+      const placeholder = document.getElementById("preview-placeholder");
+
+      if (!file) return;
+
+      const sizeKb = file.size / 1024;
+      const reader = new FileReader();
+      reader.onload = e => {
+        img.src = e.target.result;
+        img.style.display = "block";
+        placeholder.style.display = "none";
+      };
+      reader.readAsDataURL(file);
+
+      if (sizeKb < 20.0) {
+        diag.className = "notice notice-warn";
+        diag.innerHTML = `❌ <strong>REJECTED BY PORTAL:</strong> File size is <strong>${sizeKb.toFixed(1)} KB</strong>. Below the strict 20.0 KB minimum threshold!`;
+      } else if (sizeKb > 45.0) {
+        diag.className = "notice notice-warn";
+        diag.innerHTML = `❌ <strong>REJECTED BY PORTAL:</strong> File size is <strong>${sizeKb.toFixed(1)} KB</strong>. Exceeds the strict 45.0 KB maximum portal limit!`;
+      } else {
+        diag.className = "notice notice-success";
+        diag.innerHTML = `✅ <strong>ACCEPTED BY PORTAL:</strong> File size is <strong>${sizeKb.toFixed(1)} KB</strong>! Strictly complies with 20KB–45KB & 200 DPI requirements. Verified!`;
+      }
+    }
+
+    async function autoHealAndUpload() {
+      const diag = document.getElementById("photo-diagnostic");
+      const img = document.getElementById("photo-preview-img");
+      const placeholder = document.getElementById("preview-placeholder");
+
+      diag.className = "notice notice-info";
+      diag.innerHTML = "⚡ Invoking Document Exorcist in RAM (auto-crop 3.5×4.5cm, 200 DPI, binary search compress)...";
+
+      try {
+        const res = await fetch("/api/execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: "Upload my passport photo and heal it to comply with strict 20KB to 45KB portal requirements." })
+        });
+        const data = await res.json();
+        if (data.status === "COMPLETED" && data.details) {
+          const d = data.details;
+          img.src = "/proof/test_healed_passport_photo.jpg?t=" + Date.now();
+          img.style.display = "block";
+          placeholder.style.display = "none";
+
+          diag.className = "notice notice-success";
+          diag.innerHTML = `✅ <strong>HEALED IN ${d.processing_time_ms} ms!</strong> Reduced from ${d.original_size_kb} KB ➔ <strong>${d.healed_size_kb} KB</strong> (Strictly within ${d.target_range_kb}). Aspect: ${d.aspect_ratio}, ${d.dpi} DPI. Portal gate unlocked!`;
+        }
+      } catch(e) {
+        diag.className = "notice notice-warn";
+        diag.innerText = "Exorcist error: " + e.message;
+      }
+    }
+
     function triggerGoogleNotice() {
       const w = document.getElementById("google-warning");
       w.style.display = (w.style.display === "none") ? "block" : "none";

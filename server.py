@@ -323,6 +323,17 @@ async def serve_mock_orders():
     """
     return HTMLResponse(content=html)
 
+@app.get("/download/test-guide")
+async def download_test_guide_pdf():
+    pdf_path = BASE_DIR / "ApplyCopilot_Test_Prompts_Guide.pdf"
+    if pdf_path.exists():
+        return FileResponse(
+            pdf_path,
+            media_type="application/pdf",
+            headers={"Content-Disposition": "attachment; filename=ApplyCopilot_Test_Prompts_Guide.pdf"}
+        )
+    return JSONResponse({"error": "Test Guide PDF not found"}, status_code=404)
+
 @app.get("/proof/{filename}")
 async def serve_proof_image(filename: str):
     file_path = BASE_DIR / filename
