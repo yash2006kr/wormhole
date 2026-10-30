@@ -3,601 +3,80 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Wormhole: Embedded Autonomous Agent &amp; Human-in-the-Loop Cockpit</title>
+  <title>warmhole — your agentic workspace</title>
   <style>
-    :root {
-      --bg: #070a12;
-      --card-bg: #0f172a;
-      --card-border: #1e293b;
-      --browser-bg: #020617;
-      --accent-blue: #0ea5e9;
-      --accent-green: #10b981;
-      --accent-orange: #f97316;
-      --accent-purple: #a855f7;
-      --accent-red: #ef4444;
-      --text: #f8fafc;
-      --text-muted: #94a3b8;
-      --splitter-width: 8px;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-    html, body { height: 100vh; max-height: 100vh; overflow: hidden; }
-    body { background: var(--bg); color: var(--text); padding: 10px 14px; display: flex; flex-direction: column; }
-    
-    /* Top Navbar */
-    .navbar { display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); border: 1px solid var(--card-border); padding: 8px 16px; border-radius: 10px; margin-bottom: 8px; flex-shrink: 0; }
-    .brand { font-size: 17px; font-weight: 800; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; color: var(--accent-blue); }
-    .brand-sub { font-size: 11px; color: var(--text-muted); font-weight: 500; margin-left: 8px; }
-    
-    .nav-controls { display: flex; align-items: center; gap: 8px; }
-    .preset-btn { background: #1e293b; border: 1px solid var(--card-border); color: #cbd5e1; padding: 4px 9px; border-radius: 6px; font-size: 11px; cursor: pointer; transition: 0.2s; }
-    .preset-btn:hover { background: #334155; color: white; border-color: var(--accent-blue); }
-    .badge-status { background: rgba(16, 185, 129, 0.15); color: var(--accent-green); border: 1px solid var(--accent-green); padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; display: flex; align-items: center; gap: 6px; }
-    .badge-status::before { content: ""; width: 7px; height: 7px; background: var(--accent-green); border-radius: 50%; display: inline-block; animation: blink 1.5s infinite; }
-    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-    /* Resizable Workspace Layout */
-    .workspace-wrapper { display: flex; flex: 1; min-height: 0; height: calc(100vh - 66px); max-height: calc(100vh - 66px); gap: 0; position: relative; user-select: none; overflow: hidden; }
-    .panel { display: flex; flex-direction: column; min-width: 320px; height: 100%; min-height: 0; max-height: 100%; overflow: hidden; }
-    .left-panel { width: 38%; padding-right: 6px; }
-    .right-panel { width: 62%; padding-left: 6px; min-width: 460px; }
+:root{color-scheme:dark;--bg:#070911;--panel:rgba(17,20,35,.84);--line:rgba(155,170,255,.14);--muted:#9298b5;--text:#f4f2ff;--cyan:#79e8f3;--violet:#a38cff;--green:#79e7ba;--red:#ff8290;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+*{box-sizing:border-box}html,body{height:100%;margin:0}body{overflow:hidden;background:radial-gradient(ellipse at 52% 44%,#19132f 0,#0b0c19 43%,#070911 78%);color:var(--text);padding:14px 18px;display:flex;flex-direction:column}
+body:before{content:"";position:fixed;inset:-20%;pointer-events:none;background:radial-gradient(ellipse at 55% 58%,transparent 13%,rgba(132,86,255,.1) 19%,transparent 34%),radial-gradient(ellipse at 55% 58%,transparent 28%,rgba(79,217,237,.07) 29%,transparent 30%);filter:blur(26px);animation:nebula 18s ease-in-out infinite alternate;z-index:-2}
+@keyframes nebula{to{transform:rotate(-7deg) scale(1.08);opacity:.65}}
+.navbar{position:relative;z-index:3;height:52px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 18px;border:1px solid var(--line);border-radius:14px;background:rgba(12,14,26,.74);backdrop-filter:blur(18px);margin-bottom:10px}
+.brand{font-size:14px;font-weight:750;letter-spacing:.2px;display:flex;align-items:center;gap:10px;color:var(--text)}.brand>span:first-child{font-size:20px;color:var(--cyan);filter:drop-shadow(0 0 10px #73dce588)}.brand-sub{font-size:12px;color:var(--muted);font-weight:450;margin-left:8px}
+.nav-controls{display:flex;align-items:center;gap:7px}.nav-controls>span{font-size:11px;color:var(--muted)}
+.preset-btn,.btn-go,.nav-btn,.interactive-toggle-btn{border:1px solid var(--line);background:#ffffff08;color:#d5d7ea;border-radius:9px;padding:6px 10px;font-size:11px;cursor:pointer;transition:.2s}.preset-btn:hover,.nav-btn:hover,.interactive-toggle-btn:hover{border-color:#81dce977;background:#79e8f318}
+.badge-status{border:1px solid #79e7ba55;background:#79e7ba12;color:var(--green);padding:6px 11px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.35px;display:flex;align-items:center;gap:7px}.badge-status:before{content:"";width:6px;height:6px;background:var(--green);border-radius:50%;box-shadow:0 0 9px var(--green)}
+.workspace-wrapper{position:relative;z-index:1;display:flex;flex:1;min-height:0;gap:10px;position:relative;overflow:hidden}.panel{display:flex;flex-direction:column;min-width:0;height:100%;min-height:0;overflow:hidden}.left-panel{width:42%;padding:0;gap:10px}.right-panel{width:58%;padding:0;min-width:0}
+.splitter{width:1px;background:linear-gradient(transparent,#9b9dc633,transparent);cursor:col-resize;z-index:4;flex:none;position:relative}.splitter-handle{display:none}.splitter:hover{background:#7fe3ee88}
+.card,.browser-window{background:var(--panel);border:1px solid var(--line);border-radius:16px;backdrop-filter:blur(18px);position:relative;overflow:hidden}.card{padding:14px 16px;margin:0}.left-panel>#prompt-card{flex:0 0 auto!important;padding:0 20px 14px!important;border:1px solid rgba(179,164,255,.18)!important;background:linear-gradient(180deg,rgba(28,24,52,.8),rgba(12,14,27,.86))!important;border-radius:18px!important;overflow:visible}
+.left-panel>#prompt-card:after{content:"";position:absolute;inset:-1px;border-radius:18px;pointer-events:none;background:radial-gradient(320px circle at var(--px,50%) var(--py,30%),rgba(129,116,255,.13),transparent 72%)}
+.card-title{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.4px;color:#a7aac4;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1}.btn-stop-sm{background:#ff829011;border:1px solid #ff829044;padding:5px 8px;border-radius:7px;color:#ff9aa4;font-size:10px;cursor:pointer}
 
-    /* Draggable Splitter */
-    .splitter {
-      width: var(--splitter-width);
-      background: transparent;
-      cursor: col-resize;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 0.15s;
-      z-index: 20;
-      position: relative;
-    }
-    .splitter:hover, .splitter.dragging {
-      background: rgba(14, 165, 233, 0.25);
-    }
-    .splitter-handle {
-      width: 4px;
-      height: 48px;
-      border-radius: 2px;
-      background: #334155;
-      transition: 0.2s;
-    }
-    .splitter:hover .splitter-handle, .splitter.dragging .splitter-handle {
-      background: var(--accent-blue);
-      height: 64px;
-    }
+/* ROBOT PART (SHOWN IN TEXT MODE) */
+.bot-scene{height:150px;display:flex;align-items:flex-end;justify-content:center;position:relative;margin:0 -20px 10px;overflow:hidden;z-index:1;background:radial-gradient(ellipse at 50% 100%,rgba(115,81,216,.2),transparent 66%)}
+.bot-scene:before{content:"";position:absolute;width:280px;height:84px;border:1px solid #95e5f333;border-radius:50%;bottom:-60px;box-shadow:0 0 34px #8b7aff20,0 0 0 18px #8b7aff08;transform:rotate(-7deg)}
+.bot-label{position:absolute;top:16px;left:0;right:0;text-align:center;color:#9b9ab8;font-size:9.5px;letter-spacing:2.2px;text-transform:uppercase}.bot{width:115px;height:96px;position:relative;border-radius:49% 49% 38% 38%;background:linear-gradient(145deg,#d8dbf4,#8986b8 45%,#39365e 100%);box-shadow:inset -12px -13px 22px #16152d,0 8px 36px #8a7aff40;transform:translateY(8px);z-index:1}
+.bot:before{content:"";position:absolute;left:18px;right:18px;top:17px;height:48px;border-radius:26px;background:linear-gradient(135deg,#17192d,#080b16);border:1px solid #b5eff25c;box-shadow:0 0 18px #68dbe933}
+.bot:after{content:"";position:absolute;left:43px;right:43px;bottom:-6px;height:14px;border-radius:0 0 8px 8px;background:linear-gradient(90deg,#464363,#aaa8c8,#464363)}
+.bot-eye{position:absolute;top:32px;width:13px;height:15px;border-radius:50%;background:#a5f4ff;box-shadow:0 0 13px #70ebff,0 0 27px #6ee6ff99;z-index:2;transition:transform .16s ease-out}.bot-eye.left{left:40px}.bot-eye.right{right:40px}
+.bot-ear{position:absolute;width:8px;height:29px;top:40px;background:#827cae;border:1px solid #bed8ed66}.bot-ear.left{left:-6px;border-radius:8px 0 0 8px}.bot-ear.right{right:-6px;border-radius:0 8px 8px 0}
 
-    /* Cards */
-    .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; position: relative; }
-    .card-title { font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+/* CIRCLE ORB PART (REPLACES ROBOT IN VOICE MODE IN THE EXACT SAME TOP POSITION) */
+.voice-stage{height:150px;display:none;align-items:center;justify-content:center;position:relative;margin:0 -20px 10px;overflow:hidden;z-index:1;background:radial-gradient(ellipse at 50% 50%,rgba(121,232,243,.22),rgba(163,140,255,.14) 42%,transparent 70%)}
+.voice-stage:before{content:"";position:absolute;width:260px;height:100px;border:1px solid #95e5f333;border-radius:50%;box-shadow:0 0 32px #8b7aff25,0 0 0 14px #8b7aff08;transform:rotate(-5deg);pointer-events:none}
+.voice-orb{width:76px;height:76px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#d8ffff,#85e5ef 24%,#8c7ee8 55%,#292443 76%);box-shadow:0 0 24px #8eeef066,0 0 0 12px #8eeef014,0 0 0 24px #a38cff0d;transition:transform .08s linear,box-shadow .25s ease;cursor:pointer;z-index:2}
+.voice-stage.listening .voice-orb{animation:orb 1.8s ease-in-out infinite alternate;box-shadow:0 0 34px #8eeef099,0 0 0 15px #8eeef022,0 0 0 30px #a38cff15}
+@keyframes orb{to{transform:scale(1.15);filter:hue-rotate(18deg)}}
 
-    /* Attached Files Bar */
-    .attached-files-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-bottom: 8px;
-      min-height: 0;
-    }
-    .file-chip {
-      background: #1e293b;
-      border: 1px solid #334155;
-      border-radius: 6px;
-      padding: 4px 8px;
-      font-size: 11px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      color: #e2e8f0;
-      animation: fadeIn 0.2s ease-in-out;
-    }
-    .file-chip-thumb {
-      width: 18px;
-      height: 18px;
-      border-radius: 3px;
-      object-fit: cover;
-    }
-    .file-chip-name {
-      max-width: 130px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .file-chip-size {
-      color: #94a3b8;
-      font-size: 10px;
-    }
-    .file-chip-remove {
-      color: #ef4444;
-      cursor: pointer;
-      font-weight: bold;
-      padding: 0 2px;
-    }
+.welcome-copy{text-align:center;margin-bottom:12px;position:relative;z-index:1}.welcome-copy h1{font-size:20px;letter-spacing:-.6px;margin:0 0 4px;font-weight:650}.welcome-copy h1 span{color:var(--cyan)}.welcome-copy p{font-size:11.5px;color:var(--muted);margin:0}
+.mode-tabs{display:flex;width:max-content;margin:0 auto 10px;padding:3px;border:1px solid var(--line);background:#090b17;border-radius:10px;position:relative;z-index:1}.mode-tab{border:0;border-radius:7px;background:transparent;color:var(--muted);padding:6px 14px;font-size:11px;cursor:pointer;font-weight:600}.mode-tab.active{background:#28243f;color:#ebe7ff;box-shadow:inset 0 0 0 1px #bba6ff28}
+.attached-files-container{display:flex;gap:6px;flex-wrap:wrap;position:relative;z-index:2}.file-chip{background:#171a2b;border:1px solid var(--line);border-radius:8px;padding:4px 8px;font-size:10px;display:flex;align-items:center;gap:6px;color:#e4e3f1;margin-bottom:6px}.file-chip-thumb{width:18px;height:18px;border-radius:4px;object-fit:cover}.file-chip-name{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file-chip-size{color:var(--muted);font-size:9px}.file-chip-remove{color:#ff9aa4;cursor:pointer}
+.prompt-box{display:flex;gap:7px;background:#0b0e1a;border:1px solid #a89cf133;border-radius:12px;padding:5px;align-items:center;transition:.2s;position:relative;z-index:1}.prompt-box:focus-within,.prompt-box.drag-over{border-color:#83dce988;box-shadow:0 0 0 3px #83dce910}.btn-attach,.btn-mic{background:transparent;border:0;color:#a8aac4;width:32px;height:32px;border-radius:8px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center}.btn-attach:hover,.btn-mic:hover{background:#ffffff0b;color:#fff}
+input[type="text"].user-prompt-input{flex:1;min-width:0;background:transparent;border:0;color:#fff;font-size:12px;outline:none;padding:6px 4px}.user-prompt-input::placeholder{color:#777b98}
+.btn-send{background:linear-gradient(135deg,#8be6ed,#aaa0ff);color:#101426;border:0;padding:8px 13px;border-radius:8px;font-weight:750;font-size:11px;cursor:pointer;white-space:nowrap;box-shadow:0 4px 18px #8f8cfc22}.btn-send:hover{filter:brightness(1.08)}
+.voice-action-bar{display:none;flex-direction:column;align-items:center;gap:8px;margin:2px 0 8px;position:relative;z-index:1}
+.voice-hint{font-size:10px;color:var(--muted);text-align:center}
+.btn-mic.listening{background:#ff82901f;color:#ff9aa4;animation:pulse 1s infinite}@keyframes pulse{50%{box-shadow:0 0 0 6px #ff829018}}
+.quick-title{font-size:9px;color:#858aa9;font-weight:700;letter-spacing:1.2px;margin:10px 0 6px;position:relative;z-index:1}.chips{display:flex;flex-wrap:wrap;gap:5px;max-height:52px;overflow:auto;position:relative;z-index:1}.chip{background:#ffffff07;border:1px solid #ffffff12;padding:5px 8px;border-radius:8px;font-size:10px;font-weight:550;cursor:pointer;color:#c4c5d7;transition:.2s}.chip:hover{border-color:#8ce7ee55;background:#8ce7ee0d;color:white}
+.protocol-indicator{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:9px;background:#090b16;border:1px solid #ffffff0e;margin-top:10px;position:relative;z-index:1}.p-tag{font-size:9px;font-weight:750;letter-spacing:.6px;padding:3px 7px;border-radius:5px}.tag-idle{background:#9999b018;color:#aaaec1;border:1px solid #9999b026}.tag-running{background:#79e7ba18;color:var(--green);border:1px solid #79e7ba55}.tag-interrupted{background:#ff829018;color:var(--red);border:1px solid #ff829055}.tag-manual{background:#ffba6b18;color:#ffba6b;border:1px solid #ffba6b55}
 
-    /* Prompt Input Bar */
-    .prompt-box {
-      display: flex;
-      gap: 6px;
-      background: #090d16;
-      border: 1px solid var(--card-border);
-      border-radius: 9px;
-      padding: 4px;
-      align-items: center;
-      transition: border-color 0.2s;
-    }
-    .prompt-box.drag-over {
-      border-color: var(--accent-blue);
-      background: #0f1d36;
-    }
-    .prompt-box:focus-within {
-      border-color: var(--accent-blue);
-    }
-    .btn-attach {
-      background: transparent;
-      border: none;
-      color: #94a3b8;
-      width: 32px;
-      height: 32px;
-      border-radius: 6px;
-      font-size: 15px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: 0.2s;
-    }
-    .btn-attach:hover {
-      background: #1e293b;
-      color: white;
-    }
-    input[type="text"].user-prompt-input {
-      flex: 1;
-      background: transparent;
-      border: none;
-      color: white;
-      font-size: 13px;
-      outline: none;
-      padding: 6px 4px;
-    }
-    .btn-mic {
-      background: transparent;
-      border: none;
-      color: #94a3b8;
-      width: 32px;
-      height: 32px;
-      border-radius: 6px;
-      font-size: 14px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: 0.2s;
-    }
-    .btn-mic:hover {
-      background: #1e293b;
-      color: white;
-    }
-    .btn-mic.listening {
-      background: var(--accent-red);
-      color: white;
-      animation: pulse 1s infinite;
-    }
-    .btn-send {
-      background: var(--accent-blue);
-      color: white;
-      border: none;
-      padding: 7px 13px;
-      border-radius: 7px;
-      font-weight: 700;
-      font-size: 12px;
-      cursor: pointer;
-      transition: 0.2s;
-    }
-    .btn-send:hover { opacity: 0.9; }
+/* TERMINAL TELEMETRY (FIXED SIZE WITH INTERNAL CHAT-STYLE SCROLL) */
+.telemetry-card{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;margin:0!important;padding:12px 14px}.telemetry-card .card-title{font-size:10px;margin-bottom:8px}.terminal{background:#090b15;border:1px solid #ffffff0c;border-radius:10px;padding:10px 12px;font-family:ui-monospace,Consolas,monospace;font-size:10.5px;line-height:1.5;flex:1;min-height:0;overflow:auto;color:#b2e7e7;scroll-behavior:smooth}.terminal::-webkit-scrollbar{width:5px}.terminal::-webkit-scrollbar-track{background:#04060d;border-radius:3px}.terminal::-webkit-scrollbar-thumb{background:#232742;border-radius:3px}.terminal::-webkit-scrollbar-thumb:hover{background:var(--cyan)}.log-line{margin-bottom:3px;word-break:break-word}.log-time{color:#6e738e;margin-right:5px}.log-success{color:#8ae2b2}.log-warn{color:#f3cc81}.log-danger{color:#ff8995}
 
-    .btn-stop-sm {
-      background: rgba(239, 68, 68, 0.2);
-      color: #f87171;
-      border: 1px solid #ef4444;
-      padding: 3px 8px;
-      border-radius: 5px;
-      font-size: 11px;
-      font-weight: bold;
-      cursor: pointer;
-      transition: 0.2s;
-    }
-    .btn-stop-sm:hover {
-      background: #dc2626;
-      color: white;
-    }
+/* RIGHT PANEL: EMBEDDED REAL BROWSER WINDOW */
+.browser-window{height:100%;display:flex;flex-direction:column;min-height:0}.browser-header{min-height:48px;display:flex;align-items:center;gap:9px;padding:7px 12px;background:#101221;border-bottom:1px solid var(--line)}.window-controls{display:flex;gap:5px}.dot{width:8px;height:8px;border-radius:50%;background:#736b87}.dot-red{background:#ff7e8b}.dot-yellow{background:#ffc873}.dot-green{background:#72dca5}.nav-buttons{display:flex;gap:4px}.nav-btn{padding:5px 7px}.address-bar{flex:1;min-width:100px;display:flex;align-items:center;gap:7px;background:#090b15;border:1px solid #ffffff14;border-radius:8px;padding:2px 6px}.lock-icon{font-size:10px;color:var(--green)}.browser-url-input{flex:1;min-width:0;border:0;outline:none;background:transparent;color:#d8d9e8;font:11px ui-monospace,monospace;padding:5px}.btn-go{padding:4px 8px}.interactive-toggle-btn{white-space:nowrap;padding:6px 9px}.interactive-toggle-btn.active{border-color:#79e7ba55;color:var(--green)}.btn-stop-browser{border:1px solid #ff829044;color:#ff9aa4;background:#ff829010;border-radius:7px;font-size:10px;padding:6px 9px;cursor:pointer}
+.interactive-mode-banner,.human-verify-banner{display:none;align-items:center;justify-content:space-between;padding:8px 12px;background:#8c7ee81b;border-bottom:1px solid var(--line);font-size:11px}.human-verify-banner{background:#ffba6b12}.verify-left{display:flex;align-items:center;gap:8px}.verify-title{font-weight:700}.verify-sub{font-size:10px;color:var(--muted);margin-top:2px}.btn-verify-done{border:1px solid #79e7ba55;color:var(--green);background:#79e7ba10;border-radius:7px;padding:6px 9px;font-size:10px;cursor:pointer}
+.viewport-stage{flex:1;min-height:0;background:#080a14;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden}#screencast-canvas{width:100%;height:100%;object-fit:contain;outline:none;cursor:crosshair}.interrupt-overlay{display:none;position:absolute;inset:0;background:#070811b9;backdrop-filter:blur(8px);align-items:center;justify-content:center;padding:20px;z-index:5}.interrupt-modal{max-width:480px;width:100%;padding:20px;border:1px solid #ff829055;border-radius:16px;background:#171523;box-shadow:0 18px 70px #0009}.interrupt-header{display:flex;gap:10px;align-items:center;margin-bottom:14px}.interrupt-badge{color:#ff9aa4;font-size:10px;font-weight:750}.interrupt-title{font-size:14px;font-weight:700}.interrupt-context,.interrupt-question{font-size:11px;color:#c2c2d2;margin-bottom:13px}.prompt-redirect-box{display:flex;gap:8px;flex-direction:column}.redirect-prompt-input{min-height:70px;background:#0b0d18;border:1px solid var(--line);border-radius:9px;padding:9px;color:white;resize:vertical}.btn-redirect,.btn-continue,.btn-normal-mode{border:1px solid var(--line);background:#ffffff08;border-radius:8px;padding:8px 10px;color:#dedff0;font-size:10px;cursor:pointer}.btn-redirect{color:var(--cyan)}.interrupt-divider{text-align:center;font-size:9px;color:var(--muted);margin:12px}.interrupt-actions-row{display:flex;gap:8px}.btn-continue{flex:1;color:var(--green)}.btn-normal-mode{color:#ffca86}
+@media(max-width:900px){body{padding:10px}.brand-sub,.nav-controls>span,.nav-controls .preset-btn{display:none}.workspace-wrapper{gap:6px}.left-panel{width:46%}.right-panel{width:54%}.browser-header{gap:5px;padding:6px}}
+@media(max-width:680px){html,body{height:auto;min-height:100%;overflow:auto}body{min-height:100vh}.navbar{height:48px;margin-bottom:8px}.workspace-wrapper{overflow:visible;flex-direction:column}.panel{width:100%!important;height:auto}.left-panel{min-height:550px}.right-panel{height:60vh;min-height:380px}.splitter{display:none}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
 
-    /* Quick Test Chips */
-    .quick-title { font-size: 10.5px; color: var(--text-muted); font-weight: bold; margin-bottom: 4px; margin-top: 8px; }
-    .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; max-height: 52px; overflow-y: auto; }
-    .chip { background: #1e293b; border: 1px solid var(--card-border); padding: 3px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 600; cursor: pointer; transition: 0.2s; color: #cbd5e1; }
-    .chip:hover { border-color: var(--accent-blue); color: white; background: #243452; }
-
-    /* Agent Status Pill */
-    .protocol-indicator { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 7px; background: #070a12; border: 1px solid var(--card-border); margin-bottom: 0; }
-    .p-tag { font-size: 11px; font-weight: bold; padding: 2px 7px; border-radius: 5px; }
-    .tag-idle { background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid #475569; }
-    .tag-running { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); border: 1px solid var(--accent-green); }
-    .tag-interrupted { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); border: 1px solid var(--accent-red); }
-    .tag-manual { background: rgba(249, 115, 22, 0.2); color: var(--accent-orange); border: 1px solid var(--accent-orange); }
-
-    /* Terminal Telemetry */
-    .telemetry-card {
-      flex: 1;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      margin-bottom: 0 !important;
-      padding: 12px 14px;
-    }
-    .terminal {
-      background: #04060c;
-      border: 1px solid #1e293b;
-      border-radius: 8px;
-      padding: 10px 12px;
-      font-family: 'Consolas', 'Fira Code', monospace;
-      font-size: 11px;
-      line-height: 1.5;
-      flex: 1;
-      min-height: 0;
-      height: 100%;
-      overflow-y: auto;
-      overflow-x: hidden;
-      color: #a5f3fc;
-      scroll-behavior: smooth;
-    }
-    .terminal::-webkit-scrollbar { width: 6px; }
-    .terminal::-webkit-scrollbar-track { background: #020617; border-radius: 3px; }
-    .terminal::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-    .terminal::-webkit-scrollbar-thumb:hover { background: var(--accent-blue); }
-    .log-line { margin-bottom: 3px; line-height: 1.4; word-break: break-word; }
-    .log-time { color: #64748b; margin-right: 5px; }
-    .log-success { color: #4ade80; }
-    .log-warn { color: #fbbf24; }
-    .log-danger { color: #f87171; }
-
-    /* =========================================================================
-       EMBEDDED BROWSER WINDOW (RIGHT PANEL)
-       ========================================================================= */
-    .browser-window {
-      background: var(--browser-bg);
-      border: 1px solid #334155;
-      border-radius: 12px;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      height: 100%;
-      min-height: 0;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-    }
-    
-    /* Browser Top Chrome */
-    .browser-header {
-      background: #0f172a;
-      border-bottom: 1px solid #1e293b;
-      padding: 7px 12px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .window-controls { display: flex; gap: 5px; }
-    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-    .dot-red { background: #ef4444; }
-    .dot-yellow { background: #f59e0b; }
-    .dot-green { background: #10b981; }
-
-    .nav-buttons { display: flex; gap: 3px; }
-    .nav-btn {
-      background: transparent;
-      border: 1px solid transparent;
-      color: #94a3b8;
-      width: 25px;
-      height: 25px;
-      border-radius: 5px;
-      font-size: 11px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .nav-btn:hover { background: #1e293b; color: white; border-color: #334155; }
-
-    /* Address Bar */
-    .address-bar {
-      flex: 1;
-      background: #020617;
-      border: 1px solid #334155;
-      border-radius: 7px;
-      display: flex;
-      align-items: center;
-      padding: 3px 8px;
-      gap: 6px;
-      transition: border-color 0.2s;
-    }
-    .address-bar:focus-within { border-color: var(--accent-blue); }
-    .lock-icon { font-size: 11px; color: var(--accent-green); }
-    .browser-url-input {
-      flex: 1;
-      background: transparent;
-      border: none;
-      color: #f1f5f9;
-      font-size: 12px;
-      outline: none;
-      font-family: 'Consolas', monospace;
-    }
-    .btn-go {
-      background: #1e293b;
-      color: #94a3b8;
-      border: 1px solid #334155;
-      padding: 2px 7px;
-      border-radius: 4px;
-      font-size: 10.5px;
-      cursor: pointer;
-      font-weight: 600;
-    }
-    .btn-go:hover { background: var(--accent-blue); color: white; border-color: var(--accent-blue); }
-
-    .interactive-toggle-btn {
-      background: #1e293b;
-      border: 1px solid #475569;
-      color: #38bdf8;
-      padding: 3px 8px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      white-space: nowrap;
-      transition: 0.2s;
-    }
-    .interactive-toggle-btn.active {
-      background: var(--accent-orange);
-      color: white;
-      border-color: #ea580c;
-    }
-
-    .btn-stop-browser {
-      background: rgba(239, 68, 68, 0.2);
-      color: #f87171;
-      border: 1px solid #ef4444;
-      padding: 3px 8px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: bold;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-    .btn-stop-browser:hover { background: #dc2626; color: white; }
-
-    /* Interactive Normal Browsing Banner */
-    .interactive-mode-banner {
-      display: none;
-      background: linear-gradient(90deg, #d97706, #b45309);
-      color: white;
-      padding: 8px 14px;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 2px solid #fde68a;
-      z-index: 15;
-    }
-
-    /* Human Verification / Login Alert Banner */
-    .human-verify-banner {
-      display: none;
-      background: linear-gradient(90deg, #ea580c, #c2410c);
-      color: white;
-      padding: 9px 14px;
-      align-items: center;
-      justify-content: space-between;
-      border-bottom: 2px solid #fdba74;
-      z-index: 15;
-    }
-    .verify-left { display: flex; align-items: center; gap: 8px; }
-    .verify-icon { font-size: 18px; }
-    .verify-title { font-size: 12.5px; font-weight: 800; }
-    .verify-sub { font-size: 11px; color: #ffedd5; }
-    .btn-verify-done {
-      background: #ffffff;
-      color: #9a3412;
-      border: none;
-      padding: 5px 12px;
-      border-radius: 6px;
-      font-size: 11.5px;
-      font-weight: 800;
-      cursor: pointer;
-    }
-
-    /* Canvas Viewport */
-    .viewport-stage {
-      position: relative;
-      flex: 1;
-      background: #020617;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-      cursor: default;
-    }
-    #screencast-canvas {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      display: block;
-      outline: none;
-    }
-
-    /* =========================================================================
-       HUMAN-IN-THE-LOOP CHECKPOINT INTERRUPT MODAL
-       ========================================================================= */
-    .interrupt-overlay {
-      display: none;
-      position: absolute;
-      inset: 0;
-      background: rgba(3, 7, 18, 0.85);
-      backdrop-filter: blur(5px);
-      z-index: 60;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-    }
-    .interrupt-modal {
-      background: #0f172a;
-      border: 2px solid #ef4444;
-      border-radius: 14px;
-      padding: 20px;
-      max-width: 500px;
-      width: 100%;
-      box-shadow: 0 15px 40px rgba(239, 68, 68, 0.35);
-      animation: popIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    @keyframes popIn {
-      from { transform: scale(0.93); opacity: 0; }
-      to { transform: scale(1); opacity: 1; }
-    }
-    .interrupt-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 8px;
-    }
-    .interrupt-badge {
-      background: rgba(239, 68, 68, 0.2);
-      color: #f87171;
-      border: 1px solid #ef4444;
-      padding: 3px 8px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 800;
-    }
-    .interrupt-title {
-      font-size: 15px;
-      font-weight: 800;
-      color: white;
-    }
-    .interrupt-context {
-      font-size: 12px;
-      color: #cbd5e1;
-      margin-bottom: 12px;
-      line-height: 1.4;
-      background: #1e293b;
-      padding: 8px 10px;
-      border-radius: 7px;
-      border: 1px solid #334155;
-    }
-    .interrupt-question {
-      font-size: 12.5px;
-      color: #f1f5f9;
-      margin-bottom: 6px;
-    }
-    textarea.redirect-prompt-input {
-      width: 100%;
-      background: #020617;
-      border: 1px solid #334155;
-      border-radius: 8px;
-      padding: 8px 10px;
-      color: white;
-      font-size: 12.5px;
-      outline: none;
-      resize: vertical;
-      min-height: 55px;
-      box-sizing: border-box;
-      font-family: inherit;
-    }
-    textarea.redirect-prompt-input:focus { border-color: var(--accent-blue); }
-
-    .btn-redirect {
-      width: 100%;
-      background: var(--accent-blue);
-      color: white;
-      border: none;
-      padding: 9px;
-      border-radius: 7px;
-      font-weight: 800;
-      font-size: 12.5px;
-      cursor: pointer;
-      margin-top: 6px;
-      transition: 0.2s;
-    }
-    .btn-redirect:hover { opacity: 0.9; }
-
-    .interrupt-divider {
-      position: relative;
-      text-align: center;
-      margin: 12px 0 10px 0;
-    }
-    .interrupt-divider::before {
-      content: "";
-      position: absolute;
-      left: 0;
-      top: 50%;
-      right: 0;
-      height: 1px;
-      background: #334155;
-    }
-    .interrupt-divider span {
-      position: relative;
-      background: #0f172a;
-      padding: 0 8px;
-      font-size: 10px;
-      font-weight: bold;
-      color: #64748b;
-      letter-spacing: 0.5px;
-    }
-
-    .interrupt-actions-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
-    .btn-continue {
-      background: #1e293b;
-      color: #4ade80;
-      border: 1px solid #166534;
-      padding: 8px;
-      border-radius: 7px;
-      font-weight: 700;
-      font-size: 11.5px;
-      cursor: pointer;
-    }
-    .btn-continue:hover { background: #14532d; color: white; }
-
-    .btn-normal-mode {
-      background: #1e293b;
-      color: #fb923c;
-      border: 1px solid #9a3412;
-      padding: 8px;
-      border-radius: 7px;
-      font-weight: 700;
-      font-size: 11.5px;
-      cursor: pointer;
-    }
-    .btn-normal-mode:hover { background: #7c2d12; color: white; }
   </style>
 </head>
 <body>
+  <canvas id="starfield" aria-hidden="true" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:.65"></canvas>
 
   <!-- TOP NAVBAR -->
   <div class="navbar">
     <div class="brand">
-      <span>🌀</span> WORMHOLE COCKPIT
-      <span class="brand-sub">Voice-Steered Autonomous Web Agent</span>
+      <span>◉</span> warmhole <span class="brand-sub">Your agentic workspace</span>
     </div>
     
     <div class="nav-controls">
-      <span style="font-size: 11px; color: var(--text-muted);">Layout:</span>
-      <button class="preset-btn" onclick="setLayoutRatio(0.38, 0.62)">Default</button>
-      <button class="preset-btn" onclick="setLayoutRatio(0.25, 0.75)">Wide Browser</button>
+      <span style="font-size: 11px; color: var(--text-muted);">Workspace:</span>
+      <button class="preset-btn" onclick="setLayoutRatio(0.42, 0.58)">Default</button>
+      <button class="preset-btn" onclick="setLayoutRatio(0.28, 0.72)">Wide Browser</button>
       <button class="preset-btn" onclick="setLayoutRatio(0.50, 0.50)">50:50</button>
-      <div class="badge-status" id="ws-badge">STREAM CONNECTING...</div>
+      <div class="badge-status" id="ws-badge">CONNECTING</div>
     </div>
   </div>
 
@@ -608,28 +87,66 @@
     <div class="panel left-panel" id="left-panel">
       
       <!-- COMMAND & ATTACHMENT CARD -->
-      <div class="card" id="prompt-card" style="flex-shrink: 0; margin-bottom: 8px;">
+      <div class="card" id="prompt-card" style="flex-shrink: 0;">
+        
+        <!-- TOP HERO 1: ROBOT SCENE (TEXT MODE) -->
+        <div class="bot-scene" id="bot-scene" aria-label="Warmhole assistant robot">
+          <div class="bot-label">WARMHOLE · AGENT ONLINE</div>
+          <div class="bot">
+            <span class="bot-ear left"></span>
+            <span class="bot-ear right"></span>
+            <span class="bot-eye left"></span>
+            <span class="bot-eye right"></span>
+          </div>
+        </div>
+
+        <!-- TOP HERO 2: CIRCLE ORB SCENE (VOICE MODE - REPLACES ROBOT AT THE EXACT SAME TOP POSITION) -->
+        <div class="voice-stage" id="voice-stage" aria-label="Warmhole voice assistant">
+          <div class="bot-label" id="voice-label">WARMHOLE · VOICE RADAR</div>
+          <div class="voice-orb" id="voice-orb" onclick="toggleMic()" title="Click circle to speak"></div>
+        </div>
+
+        <!-- WELCOME HEADING -->
+        <div class="welcome-copy">
+          <h1 id="welcome-h1">Where to, <span>captain?</span></h1>
+          <p id="welcome-p">Your agent is ready when you are.</p>
+        </div>
+
+        <!-- MODE TABS (TEXT VS VOICE) -->
+        <div class="mode-tabs" role="tablist" aria-label="Input mode">
+          <button class="mode-tab active" id="text-mode-tab" onclick="setInputMode('text')" role="tab" aria-selected="true">✦ &nbsp;Text</button>
+          <button class="mode-tab" id="voice-mode-tab" onclick="setInputMode('voice')" role="tab" aria-selected="false">◖)) &nbsp;Voice</button>
+        </div>
+
         <div class="card-title">
-          <span>Jarvis Command Interface</span>
+          <span>Give your agent a task</span>
           <button class="btn-stop-sm" onclick="abortAgent()" title="Emergency halt active task">🛑 Stop Agent</button>
         </div>
 
         <!-- ATTACHED FILES CHIPS -->
         <div class="attached-files-container" id="attached-files-container"></div>
 
-        <!-- MULTIMODAL PROMPT BAR -->
+        <!-- MULTIMODAL TEXT PROMPT BAR (SHOWN IN TEXT MODE) -->
         <div class="prompt-box" id="drop-zone">
           <button class="btn-attach" onclick="document.getElementById('file-input').click()" title="Attach photos, PDFs, or documents">📎</button>
           <input type="file" id="file-input" multiple accept="image/*,.pdf,.doc,.docx,.txt,.json,.csv" style="display: none;" onchange="handleFileSelect(event)">
           
-          <input type="text" class="user-prompt-input" id="user-input" placeholder="Type task or drop files (e.g. 'Go to https://yash2006kr.vercel.app/ and send message')..." onkeypress="handleKey(event)">
+          <input type="text" class="user-prompt-input" id="user-input" placeholder="Ask warmhole to find, compare, or take action…" onkeypress="handleKey(event)">
           
           <button class="btn-mic" id="btn-mic" onclick="toggleMic()" title="Voice Microphone">🎙️</button>
-          <button class="btn-send" id="btn-send" onclick="sendPrompt()">Execute ➔</button>
+          <button class="btn-send" id="btn-send" onclick="sendPrompt()">Run&nbsp; ↗</button>
+        </div>
+
+        <!-- VOICE ACTION BAR (SHOWN IN VOICE MODE IN PLACE OF TEXT BAR) -->
+        <div class="voice-action-bar" id="voice-action-bar">
+          <button class="btn-send" id="voice-start" onclick="toggleMic()" style="padding: 10px 22px; font-size: 12px; display: inline-flex; align-items: center; gap: 6px;">
+            <span>Start speaking</span> · 🎙
+          </button>
+          <div class="voice-hint" id="voice-hint">Click the circle orb above or button to speak — your command runs automatically</div>
         </div>
 
         <!-- QUICK TEST SCENARIOS -->
-        <div class="quick-title">QUICK SCENARIOS:</div>
+        <div class="quick-title">TRY A TASK</div>
         <div class="chips">
           <div class="chip" onclick="triggerScenario('live_yash')">🚀 Portfolio: Send Message</div>
           <div class="chip" onclick="triggerScenario('live_wiki')">🌐 Search AI on Wikipedia</div>
@@ -656,7 +173,7 @@
           </div>
           <div style="display: flex; gap: 8px; align-items: center;">
             <button class="btn-stop-sm" onclick="abortAgent()" title="Halt current loop">🛑 Stop Loop</button>
-            <span style="font-size: 11px; cursor: pointer; color: var(--accent-blue);" onclick="clearLogs()">Clear</span>
+            <span style="font-size: 11px; cursor: pointer; color: var(--cyan);" onclick="clearLogs()">Clear</span>
           </div>
         </div>
         <div class="terminal" id="terminal-logs">
@@ -779,7 +296,135 @@
     let ctx = canvas.getContext("2d");
     let currentImage = new Image();
     let attachedFiles = [];
+
     let isNormalBrowsingActive = false;
+    let inputMode = "text";
+    let audioContext, audioStream, levelFrame;
+
+    // =========================================================================
+    // SWITCH BETWEEN TEXT & VOICE MODE (REPLACES ROBOT WITH CIRCLE ORB AT TOP)
+    // =========================================================================
+    function setInputMode(mode) {
+      inputMode = mode;
+      const isVoice = (mode === "voice");
+
+      document.getElementById("text-mode-tab").classList.toggle("active", !isVoice);
+      document.getElementById("voice-mode-tab").classList.toggle("active", isVoice);
+      document.getElementById("text-mode-tab").setAttribute("aria-selected", !isVoice);
+      document.getElementById("voice-mode-tab").setAttribute("aria-selected", isVoice);
+
+      // 1. TOP HERO AREA: REPLACE ROBOT SCENE WITH CIRCLE ORB
+      const botScene = document.getElementById("bot-scene");
+      const voiceStage = document.getElementById("voice-stage");
+      if (botScene && voiceStage) {
+        botScene.style.display = isVoice ? "none" : "flex";
+        voiceStage.style.display = isVoice ? "flex" : "none";
+      }
+
+      // 2. INPUT CONTROLS BELOW: TOGGLE TEXT BOX VS VOICE ACTION BAR
+      const dropZone = document.getElementById("drop-zone");
+      const voiceBar = document.getElementById("voice-action-bar");
+      if (dropZone) dropZone.style.display = isVoice ? "none" : "flex";
+      if (voiceBar) voiceBar.style.display = isVoice ? "flex" : "none";
+
+      // 3. DYNAMIC TITLE
+      const h1 = document.getElementById("welcome-h1");
+      const p = document.getElementById("welcome-p");
+      if (h1 && p) {
+        if (isVoice) {
+          h1.innerHTML = "Voice <span>Navigation</span>";
+          p.innerText = "Click the circle orb above or button to speak.";
+        } else {
+          h1.innerHTML = "Where to, <span>captain?</span>";
+          p.innerText = "Your agent is ready when you are.";
+        }
+      }
+
+      if (!isVoice) {
+        stopAudioMeter();
+        if (recognition) {
+          try { recognition.stop(); } catch(e){}
+        }
+      }
+    }
+
+    // Interactive 3D Robot Eyes Tracking
+    document.addEventListener("pointermove", (event) => {
+      const card = document.getElementById("prompt-card");
+      if (!card) return;
+      const rect = card.getBoundingClientRect();
+      card.style.setProperty("--px", (event.clientX - rect.left) + "px");
+      card.style.setProperty("--py", (event.clientY - rect.top) + "px");
+      const dx = (event.clientX - window.innerWidth / 2) / (window.innerWidth / 2);
+      const dy = (event.clientY - window.innerHeight / 2) / (window.innerHeight / 2);
+      document.querySelectorAll(".bot-eye").forEach((eye) => {
+        eye.style.transform = "translate(" + (dx * 5) + "px," + (dy * 4) + "px)";
+      });
+    }, {passive:true});
+
+    // Starfield Animation
+    (function drawStars() {
+      const canvas = document.getElementById("starfield");
+      if (!canvas) return;
+      const c = canvas.getContext("2d");
+      let w, h, stars = [];
+      function resize() {
+        const dpr = Math.min(devicePixelRatio || 1, 2);
+        w = canvas.width = innerWidth * dpr; h = canvas.height = innerHeight * dpr;
+        canvas.style.width = innerWidth + "px"; canvas.style.height = innerHeight + "px";
+        stars = Array.from({length: Math.floor(innerWidth * innerHeight / 6000)}, () => ({
+          x: Math.random()*w, y: Math.random()*h, r: Math.random()*1.1+.25, a: Math.random()*.55+.15, p: Math.random()*6.28
+        }));
+      }
+      function frame(t) {
+        c.clearRect(0,0,w,h);
+        for (const s of stars) {
+          const driftX = (window.__mx || 0) * .008, driftY = (window.__my || 0) * .008;
+          c.globalAlpha = s.a * (.72 + .28 * Math.sin(t*.0007+s.p));
+          c.fillStyle = "#d9e7ff"; c.beginPath(); c.arc(s.x-driftX,s.y-driftY,s.r,0,Math.PI*2); c.fill();
+        }
+        c.globalAlpha = 1; requestAnimationFrame(frame);
+      }
+      addEventListener("resize", resize, {passive:true}); 
+      addEventListener("pointermove", e=>{window.__mx=e.clientX-innerWidth/2;window.__my=e.clientY-innerHeight/2},{passive:true});
+      resize(); requestAnimationFrame(frame);
+    })();
+
+    // Voice Meter for Circle Orb
+    async function startAudioMeter() {
+      try {
+        audioStream = await navigator.mediaDevices.getUserMedia({audio:true});
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const analyser = audioContext.createAnalyser(); analyser.fftSize = 256;
+        audioContext.createMediaStreamSource(audioStream).connect(analyser);
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        document.getElementById("voice-stage").classList.add("listening");
+        document.getElementById("voice-label").innerText = "WARMHOLE · LISTENING...";
+        const measure = () => {
+          analyser.getByteFrequencyData(data);
+          const level = data.reduce((a,b)=>a+b,0)/data.length/255;
+          const orb = document.getElementById("voice-orb");
+          if (orb) orb.style.transform = "scale(" + (1 + level * 1.3) + ")";
+          levelFrame = requestAnimationFrame(measure);
+        }; measure();
+      } catch (e) {
+        const hint = document.getElementById("voice-hint");
+        if (hint) hint.textContent = "Microphone access needed. Please allow microphone in browser.";
+      }
+    }
+
+    function stopAudioMeter() {
+      if (levelFrame) cancelAnimationFrame(levelFrame);
+      if (audioStream) audioStream.getTracks().forEach(track=>track.stop());
+      if (audioContext) audioContext.close();
+      audioStream = null; audioContext = null;
+      const stage = document.getElementById("voice-stage");
+      if (stage) stage.classList.remove("listening");
+      const label = document.getElementById("voice-label");
+      if (label) label.innerText = "WARMHOLE · VOICE RADAR";
+      const orb = document.getElementById("voice-orb");
+      if (orb) orb.style.transform = "";
+    }
 
     // =========================================================================
     // 1. DRAGGABLE SPLITTER RESIZING
@@ -875,7 +520,7 @@
 
       ws.onopen = () => {
         document.getElementById("ws-badge").innerText = "LIVE STREAM ACTIVE";
-        document.getElementById("ws-badge").style.borderColor = "var(--accent-green)";
+        document.getElementById("ws-badge").style.borderColor = "var(--green)";
         log("Connected to embedded Chromium CDP session.", "success");
       };
 
@@ -899,7 +544,7 @@
 
         // Instant Interrupt Triggered
         else if (msg.type === "INTERRUPT_TRIGGERED") {
-          if (isNormalBrowsingActive) return; // Ignore if user chose normal mode
+          if (isNormalBrowsingActive) return;
           updateAgentState("INTERRUPTED");
           let ctxBox = document.getElementById("interrupt-context");
           let url = msg.url || "current page";
@@ -934,7 +579,7 @@
 
       ws.onclose = () => {
         document.getElementById("ws-badge").innerText = "STREAM RECONNECTING...";
-        document.getElementById("ws-badge").style.borderColor = "var(--accent-red)";
+        document.getElementById("ws-badge").style.borderColor = "var(--red)";
         setTimeout(connectWebSocket, 2000);
       };
     }
@@ -1024,7 +669,7 @@
         btn.innerHTML = "<span>🎮 In Normal Mode</span>";
         banner.style.display = "flex";
         updateAgentState("MANUAL_CONTROL");
-        log("[INTERACTIVE MODE] You now have 100% direct mouse, scroll, and keyboard control.", "success");
+        log("[INTERACTIVE MODE] Direct mouse, scroll, and keyboard control enabled.", "success");
       } else {
         btn.classList.remove("active");
         btn.innerHTML = "<span>🎮 Use Normally</span>";
@@ -1227,6 +872,10 @@
       }
     }
 
+    function directNavigate(direction) {
+      log(`Browser nav: ${direction}`);
+    }
+
     function triggerScenario(type) {
       let box = document.getElementById("user-input");
       if (type === 'live_yash') box.value = "go to this website https://yash2006kr.vercel.app/ and send a message to the guy, details of mine is in the document attached";
@@ -1274,6 +923,7 @@
       document.getElementById("terminal-logs").innerHTML = "";
     }
 
+    // Web Speech API Voice Recognition
     let recognition;
     function toggleMic() {
       let btn = document.getElementById("btn-mic");
@@ -1289,20 +939,37 @@
         recognition.lang = 'en-IN';
         
         recognition.onstart = () => {
-          btn.classList.add("listening");
+          if (btn) btn.classList.add("listening");
           log("[MIC ACTIVE] Listening to voice input...");
         };
         recognition.onresult = (event) => {
           let text = event.results[0][0].transcript;
           document.getElementById("user-input").value = text;
-          btn.classList.remove("listening");
-          log(`[SPEECH RECOGNIZED] "${text}"`, "success");
+          if (btn) btn.classList.remove("listening");
+          log("[SPEECH RECOGNIZED] " + text, "success");
           sendPrompt();
         };
-        recognition.onerror = () => { btn.classList.remove("listening"); };
-        recognition.onend = () => { btn.classList.remove("listening"); };
+        recognition.onerror = () => { 
+          if (btn) btn.classList.remove("listening"); 
+          stopAudioMeter(); 
+        };
+        recognition.onend = () => {
+          if (btn) btn.classList.remove("listening");
+          stopAudioMeter();
+          const vStart = document.getElementById("voice-start");
+          if (vStart) vStart.innerHTML = "<span>Start speaking</span> · 🎙";
+        };
       }
-      recognition.start();
+      if (inputMode === "voice") {
+        const vStart = document.getElementById("voice-start");
+        if (vStart) vStart.innerHTML = "<span>Listening…</span> 🎙";
+        startAudioMeter();
+      }
+      try {
+        recognition.start();
+      } catch (e) {
+        // Recognition already started
+      }
     }
 
     window.addEventListener("DOMContentLoaded", connectWebSocket);
