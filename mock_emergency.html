@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Emergency Medical Response - SOS Active Dispatch</title>
+  <style>
+    :root {
+      --bg: #070913;
+      --card: rgba(18, 22, 40, 0.95);
+      --red: #ef4444;
+      --red-glow: rgba(239, 68, 68, 0.35);
+      --amber: #f59e0b;
+      --green: #10b981;
+      --cyan: #06b6d4;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: radial-gradient(circle at 50% 10%, #1f0d14 0%, #060812 100%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px;
+    }
+    .container {
+      width: 100%;
+      max-width: 780px;
+    }
+    
+    /* Emergency Alert Header Banner */
+    .emergency-banner {
+      background: linear-gradient(135deg, rgba(239,68,68,0.2), rgba(239,68,68,0.05));
+      border: 2px solid var(--red);
+      border-radius: 14px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 0 30px var(--red-glow);
+      animation: pulse-border 2s infinite ease-in-out;
+    }
+    @keyframes pulse-border {
+      0%, 100% { box-shadow: 0 0 20px rgba(239,68,68,0.3); }
+      50% { box-shadow: 0 0 35px rgba(239,68,68,0.65); }
+    }
+    .siren-icon {
+      font-size: 32px;
+      animation: spin-siren 1.5s infinite linear;
+    }
+    @keyframes spin-siren {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.15); }
+      100% { transform: scale(1); }
+    }
+    .banner-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: #fecaca;
+      letter-spacing: 0.5px;
+    }
+    .banner-sub {
+      font-size: 11.5px;
+      color: #cbd5e1;
+      margin-top: 2px;
+    }
+    .status-badge {
+      background: var(--red);
+      color: #fff;
+      font-weight: 800;
+      font-size: 11px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* Grid Layout */
+    .emergency-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    @media (max-width: 640px) {
+      .emergency-grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .card-header h3 {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .card-header .icon { font-size: 18px; }
+
+    /* ETA Display */
+    .eta-box {
+      background: rgba(239,68,68,0.12);
+      border: 1px dashed var(--red);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+      margin-bottom: 12px;
+    }
+    .eta-number {
+      font-size: 32px;
+      font-weight: 900;
+      color: #f87171;
+      font-variant-numeric: tabular-nums;
+    }
+    .eta-label {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .info-list {
+      font-size: 11.5px;
+      line-height: 1.6;
+    }
+    .info-list li {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .info-list .label { color: var(--muted); }
+    .info-list .val { font-weight: 600; color: #f1f5f9; text-align: right; }
+
+    /* Clinical Instructions Box */
+    .first-aid-box {
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid var(--green);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+    }
+    .first-aid-box h4 {
+      color: #6ee7b7;
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .instructions-list {
+      font-size: 11.5px;
+      color: #e2e8f0;
+      line-height: 1.6;
+      padding-left: 18px;
+    }
+    .instructions-list li {
+      margin-bottom: 6px;
+    }
+
+    /* CPR Rhythm Metronome */
+    .cpr-box {
+      background: rgba(6, 182, 212, 0.08);
+      border: 1px solid var(--cyan);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .cpr-heart {
+      width: 48px;
+      height: 48px;
+      background: var(--red);
+      clip-path: polygon(50% 15%, 80% 0, 100% 25%, 100% 60%, 50% 95%, 0 60%, 0 25%, 20% 0);
+      animation: heartbeat 0.545s infinite ease-in-out; /* ~110 BPM */
+    }
+    @keyframes heartbeat {
+      0% { transform: scale(1); }
+      14% { transform: scale(1.22); }
+      28% { transform: scale(1); }
+      42% { transform: scale(1.18); }
+      70% { transform: scale(1); }
+    }
+    .cpr-text {
+      flex: 1;
+      margin-left: 16px;
+      font-size: 11.5px;
+      line-height: 1.5;
+    }
+    .cpr-text strong { color: #67e8f9; }
+
+    /* Call Buttons */
+    .call-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .btn-call {
+      flex: 1;
+      padding: 12px;
+      border-radius: 8px;
+      border: 0;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      text-decoration: none;
+      transition: 0.2s;
+    }
+    .btn-call-red {
+      background: linear-gradient(135deg, #ef4444, #b91c1c);
+      color: #fff;
+    }
+    .btn-call-blue {
+      background: linear-gradient(135deg, #0284c7, #0369a1);
+      color: #fff;
+    }
+    .btn-call:hover { filter: brightness(1.15); }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <!-- BANNER -->
+    <div class="emergency-banner">
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <div class="siren-icon">🚨</div>
+        <div>
+          <div class="banner-title">ACUTE CARDIAC EMERGENCY SOS ACTIVATED</div>
+          <div class="banner-sub">Autonomous GPS Dispatch · Pre-cleared ER Trauma Bay · Next-of-Kin Notified</div>
+        </div>
+      </div>
+      <div class="status-badge" id="dispatch-badge">DISPATCHED</div>
+    </div>
+
+    <!-- MAIN TWO COLUMN CARDS -->
+    <div class="emergency-grid">
+      
+      <!-- CARD 1: AMBULANCE DISPATCH -->
+      <div class="card">
+        <div class="card-header">
+          <span class="icon">🚑</span>
+          <h3>Advanced Cardiac Life Support (ACLS) Ambulance</h3>
+        </div>
+        
+        <div class="eta-box">
+          <div class="eta-number" id="countdown">05:42</div>
+          <div class="eta-label">Estimated Arrival Time (ETA)</div>
+        </div>
+
+        <ul class="info-list">
+          <li>
+            <span class="label">Vehicle Registration:</span>
+            <span class="val">KA-05-EM-1108 (Mobile ICU)</span>
+          </li>
+          <li>
+            <span class="label">Unit Commander:</span>
+            <span class="val">Paramedic Suresh Kumar</span>
+          </li>
+          <li>
+            <span class="label">Emergency Service:</span>
+            <span class="val">Karnataka 108 Emergency / GVK EMRI</span>
+          </li>
+          <li>
+            <span class="label">Pickup Location:</span>
+            <span class="val">Kumbalagodu, Mysore Road, Bengaluru</span>
+          </li>
+          <li>
+            <span class="label">Siren Priority:</span>
+            <span class="val" style="color:var(--red);">CODE 3 (Siren & High Beams)</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- CARD 2: PRE-BOOKED HOSPITAL APPOINTMENT & ER -->
+      <div class="card">
+        <div class="card-header">
+          <span class="icon">🏥</span>
+          <h3>Pre-Booked Emergency Hospital & Cardiac Bay</h3>
+        </div>
+
+        <div style="background: rgba(16,185,129,0.1); border: 1px solid var(--green); border-radius: 10px; padding: 12px; margin-bottom: 12px; text-align: center;">
+          <div style="font-size: 14px; font-weight: 800; color: #34d399;">PRE-CLEARED ADMISSION (ZERO WAIT)</div>
+          <div style="font-size: 11px; color: var(--muted); margin-top: 2px;">Assigned Bay: <strong>Cardiac Resuscitation Bay 02</strong></div>
+        </div>
+
+        <ul class="info-list">
+          <li>
+            <span class="label">Destination Hospital:</span>
+            <span class="val">BGS Gleneagles Global Hospital</span>
+          </li>
+          <li>
+            <span class="label">Distance & Transit:</span>
+            <span class="val">3.2 km · 7 Minutes Away</span>
+          </li>
+          <li>
+            <span class="label">On-Duty Resuscitation Lead:</span>
+            <span class="val">Dr. Anand M (Consultant Cardiologist)</span>
+          </li>
+          <li>
+            <span class="label">Equipment on Standby:</span>
+            <span class="val">12-Lead ECG · Defibrillator · Cath Lab</span>
+          </li>
+          <li>
+            <span class="label">ER Admission Token:</span>
+            <span class="val" style="color:var(--cyan);">ER-CARDIAC-9941</span>
+          </li>
+        </ul>
+      </div>
+
+    </div>
+
+    <!-- FIRST AID CLINICAL GUIDANCE -->
+    <div class="first-aid-box">
+      <h4><span>🩺</span> Immediate Life-Saving First-Aid (Next 60 Seconds)</h4>
+      <ol class="instructions-list">
+        <li><strong>Chew 300mg Soluble Aspirin</strong> immediately if conscious and not allergic. Chewing delivers antiplatelet medication into the bloodstream within 5 minutes.</li>
+        <li><strong>Adopt 'W-Position'</strong>: Sit on the floor with knees bent and back and head well supported with cushions. Never lie flat and never stand up.</li>
+        <li><strong>Loosen Clothing</strong>: Unbutton tight collars, belts, and ties to ease respiratory breathing.</li>
+        <li><strong>Unlock Front Door Now</strong>: Ensure paramedics can enter your home instantly without knocking or breaking doors.</li>
+        <li><strong>Do NOT Drive</strong>: Stay seated. Your mobile ICU ambulance is equipped with oxygen and cardiac monitors.</li>
+      </ol>
+    </div>
+
+    <!-- CPR RHYTHM METRONOME (110 BPM) -->
+    <div class="cpr-box">
+      <div class="cpr-heart"></div>
+      <div class="cpr-text">
+        <strong>Contingency CPR Rhythm Metronome (110 BPM)</strong><br>
+        If patient becomes unresponsive or stops breathing, push hard and fast in center of chest to the rhythm of this pulsing heart (100–120 compressions/min, depth 2 inches).
+      </div>
+    </div>
+
+    <!-- PATIENT & KIN SUMMARY CARD -->
+    <div class="card" style="margin-bottom: 20px;">
+      <div class="card-header">
+        <span class="icon">👤</span>
+        <h3>Patient Credentials & Emergency Kin Notification</h3>
+      </div>
+      <ul class="info-list">
+        <li>
+          <span class="label">Patient Name & Age:</span>
+          <span class="val">Yashwanth K R (Age 23, Male, Blood: O+)</span>
+        </li>
+        <li>
+          <span class="label">Allergies & Medical Profile:</span>
+          <span class="val">No known drug allergies (Source: vault.json)</span>
+        </li>
+        <li>
+          <span class="label">Emergency Contact Notified:</span>
+          <span class="val" style="color:#6ee7b7;">Rajesh K R (+91 98450 11223) · Delivered via SMS & WhatsApp with Live GPS</span>
+        </li>
+      </ul>
+      
+      <!-- DIRECT CALL BRIDGES -->
+      <div class="call-row">
+        <a href="tel:108" class="btn-call btn-call-red">
+          <span>📞</span> Call 108 Ambulance Dispatch
+        </a>
+        <a href="tel:112" class="btn-call btn-call-red">
+          <span>📞</span> Call 112 National SOS
+        </a>
+        <a href="tel:+918026255555" class="btn-call btn-call-blue">
+          <span>🏥</span> Call BGS Hospital ER
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Live countdown timer for ambulance ETA
+    let seconds = 342; // 5 min 42 sec
+    const countdownEl = document.getElementById("countdown");
+    setInterval(() => {
+      if (seconds > 0) {
+        seconds--;
+        const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+        const s = (seconds % 60).toString().padStart(2, '0');
+        countdownEl.innerText = `${m}:${s}`;
+      } else {
+        countdownEl.innerText = "ARRIVED";
+        countdownEl.style.color = "#10b981";
+      }
+    }, 1000);
+  </script>
+</body>
+</html>

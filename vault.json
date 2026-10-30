@@ -20,7 +20,13 @@
     "cgpa": "8.85",
     "tenth_percentage": "92.4%",
     "twelfth_percentage": "89.6%",
-    "skills": ["Python", "FastAPI", "Agentic AI", "Playwright", "Distributed Systems"],
+    "skills": [
+      "Python",
+      "FastAPI",
+      "Agentic AI",
+      "Playwright",
+      "Distributed Systems"
+    ],
     "key_projects": [
       "VoiceKirana: Offline Edge Intelligence Ledger for Retail Kirana Stores",
       "ApplyCopilot: Autonomous Multi-Modal Web Agent with 5 Specialized Execution Protocols"
@@ -56,5 +62,41 @@
     "state": "Karnataka",
     "pincode": "560074",
     "country": "India"
-  }
+  },
+  "medical_profile": {
+    "blood_group": "O+",
+    "known_allergies": "None (No known drug allergies)",
+    "pre_existing_conditions": "None",
+    "emergency_notes": "Eligible for 300mg chewable aspirin in suspected cardiac ischemia."
+  },
+  "emergency_contacts": [
+    {
+      "name": "Rajesh K R",
+      "relationship": "Father / Primary Kin",
+      "phone": "+91 98450 11223"
+    },
+    {
+      "name": "Preethi K R",
+      "relationship": "Family Member",
+      "phone": "+91 98450 44556"
+    }
+  ],
+  "emergency_hospitals": [
+    {
+      "name": "BGS Gleneagles Global Hospital - Cardiac & Trauma Center",
+      "location": "Kengeri, Mysore Road, Bengaluru",
+      "distance_km": 3.2,
+      "eta_mins": 7,
+      "emergency_phone": "+91 80 2625 5555",
+      "er_triage_bay": "Cardiac Resuscitation Bay 02"
+    },
+    {
+      "name": "Manipal Hospital Speciality Emergency Center",
+      "location": "Mysore Road, Bengaluru",
+      "distance_km": 6.8,
+      "eta_mins": 14,
+      "emergency_phone": "+91 80 2502 4444",
+      "er_triage_bay": "Trauma Bay 01"
+    }
+  ]
 }

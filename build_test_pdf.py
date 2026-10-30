@@ -51,58 +51,50 @@ def generate_pdf(filename="ApplyCopilot_Test_Prompts_Guide.pdf"):
         'DocTitle',
         parent=styles['Normal'],
         fontName='Helvetica-Bold',
-        fontSize=20,
-        leading=24,
+        fontSize=18,
+        leading=22,
         textColor=colors.HexColor("#0f172a")
     )
     subtitle_style = ParagraphStyle(
         'DocSubtitle',
         parent=styles['Normal'],
         fontName='Helvetica',
-        fontSize=10,
-        leading=14,
+        fontSize=9.5,
+        leading=13,
         textColor=colors.HexColor("#475569")
     )
     h1_style = ParagraphStyle(
         'SectionH1',
         parent=styles['Normal'],
         fontName='Helvetica-Bold',
-        fontSize=13,
-        leading=17,
+        fontSize=12,
+        leading=16,
         textColor=colors.HexColor("#1e293b"),
-        spaceBefore=10,
-        spaceAfter=6
+        spaceBefore=8,
+        spaceAfter=5
     )
     body_style = ParagraphStyle(
         'Body',
         parent=styles['Normal'],
         fontName='Helvetica',
-        fontSize=8.5,
-        leading=12,
+        fontSize=8.2,
+        leading=11.5,
         textColor=colors.HexColor("#334155")
     )
     prompt_box_style = ParagraphStyle(
         'PromptBox',
         parent=styles['Normal'],
         fontName='Helvetica-Bold',
-        fontSize=9,
-        leading=13,
+        fontSize=8.5,
+        leading=12,
         textColor=colors.HexColor("#0369a1")
-    )
-    badge_style = ParagraphStyle(
-        'Badge',
-        parent=styles['Normal'],
-        fontName='Helvetica-Bold',
-        fontSize=8,
-        leading=10,
-        textColor=colors.HexColor("#0284c7")
     )
     bold_label = ParagraphStyle(
         'BoldLabel',
         parent=styles['Normal'],
         fontName='Helvetica-Bold',
-        fontSize=8.5,
-        leading=12,
+        fontSize=8.2,
+        leading=11.5,
         textColor=colors.HexColor("#0f172a")
     )
 
@@ -111,11 +103,11 @@ def generate_pdf(filename="ApplyCopilot_Test_Prompts_Guide.pdf"):
     # Title & Header Banner
     story.append(Paragraph("APPLYCOPILOT / WORMHOLE TEST & PROMPT SUITE", title_style))
     story.append(Spacer(1, 4))
-    story.append(Paragraph("Comprehensive Verification Guide for All 7 System Protocols & 3 Surprise Hurdles", subtitle_style))
+    story.append(Paragraph("Comprehensive Verification Guide for All 8 System Protocols, Multi-Key Failover & 3 Surprise Hurdles", subtitle_style))
     story.append(Spacer(1, 4))
     story.append(Paragraph("<b>Author:</b> Yashwanth K R &nbsp;|&nbsp; <b>Cockpit URL:</b> http://localhost:8000 &nbsp;|&nbsp; <b>GitHub:</b> github.com/yash2006kr/wormhole", subtitle_style))
-    story.append(Spacer(1, 10))
-    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#0284c7"), spaceAfter=12))
+    story.append(Spacer(1, 8))
+    story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#0284c7"), spaceAfter=10))
 
     # Architecture Summary Table
     matrix_data = [
@@ -126,16 +118,28 @@ def generate_pdf(filename="ApplyCopilot_Test_Prompts_Guide.pdf"):
             Paragraph("<b>Benchmark</b>", bold_label)
         ],
         [
+            Paragraph("<b>Part 2: Document Exorcist</b>", body_style),
+            Paragraph("<code>exorcist.py</code>", body_style),
+            Paragraph("In-memory image surgery: 3.5x4.5cm, 200 DPI, strictly 20KB-45KB", body_style),
+            Paragraph("<b>77.9 ms</b> (<350ms)", body_style)
+        ],
+        [
             Paragraph("<b>Part 1: User Vault</b>", body_style),
             Paragraph("<code>vault.json</code>", body_style),
             Paragraph("Stores profile, academics (8.85 CGPA), marks, transit prefs, sample photo", body_style),
             Paragraph("Instant read", body_style)
         ],
         [
-            Paragraph("<b>Part 2: Document Exorcist</b>", body_style),
-            Paragraph("<code>exorcist.py</code>", body_style),
-            Paragraph("In-memory image surgery: 3.5x4.5cm, 200 DPI, strictly 20KB-45KB", body_style),
-            Paragraph("<b>77.9 ms</b> (<350ms)", body_style)
+            Paragraph("<b>Part 8: SOS Emergency Sentinel</b>", body_style),
+            Paragraph("<code>sos_sentinel.py</code>", body_style),
+            Paragraph("Autonomous ambulance dispatch, hospital ER bay pre-booking & kin alert", body_style),
+            Paragraph("<b>8.2 ms</b> instant dispatch", body_style)
+        ],
+        [
+            Paragraph("<b>Resilience: Multi-Key Pool</b>", body_style),
+            Paragraph("<code>api_pool.py</code>", body_style),
+            Paragraph("Multi-key failover round-robin, rate-limit (429) quarantine, backup models", body_style),
+            Paragraph("Zero rate-limit hang", body_style)
         ],
         [
             Paragraph("<b>Part 3: Anti-Dark-Pattern</b>", body_style),
@@ -187,17 +191,17 @@ def generate_pdf(filename="ApplyCopilot_Test_Prompts_Guide.pdf"):
         ],
     ]
 
-    t = Table(matrix_data, colWidths=[110, 95, 235, 100])
+    t = Table(matrix_data, colWidths=[115, 90, 235, 100])
     t.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#f1f5f9")),
         ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#cbd5e1")),
-        ('TOPPADDING', (0,0), (-1,-1), 4),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-        ('LEFTPADDING', (0,0), (-1,-1), 6),
-        ('RIGHTPADDING', (0,0), (-1,-1), 6),
+        ('TOPPADDING', (0,0), (-1,-1), 3),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+        ('LEFTPADDING', (0,0), (-1,-1), 5),
+        ('RIGHTPADDING', (0,0), (-1,-1), 5),
     ]))
     story.append(t)
-    story.append(Spacer(1, 14))
+    story.append(Spacer(1, 10))
 
     # SECTION GENERATOR HELPER
     def make_protocol_section(part_num, title, badge, target_url, prompt_text, files_needed, what_to_do, agent_action, expected_output, proof_metric):
@@ -235,20 +239,20 @@ def generate_pdf(filename="ApplyCopilot_Test_Prompts_Guide.pdf"):
             ],
         ]
         
-        sec_table = Table(detail_rows, colWidths=[120, 420])
+        sec_table = Table(detail_rows, colWidths=[115, 425])
         sec_table.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (0,-1), colors.HexColor("#f8fafc")),
             ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#e2e8f0")),
-            ('TOPPADDING', (0,0), (-1,-1), 4),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-            ('LEFTPADDING', (0,0), (-1,-1), 6),
-            ('RIGHTPADDING', (0,0), (-1,-1), 6),
+            ('TOPPADDING', (0,0), (-1,-1), 3),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+            ('LEFTPADDING', (0,0), (-1,-1), 5),
+            ('RIGHTPADDING', (0,0), (-1,-1), 5),
         ]))
         card.append(sec_table)
-        card.append(Spacer(1, 10))
+        card.append(Spacer(1, 8))
         return KeepTogether(card)
 
-    # 1. Part 2: Document Exorcist (Put first as explicitly highlighted by user!)
+    # 1. Part 2: Document Exorcist
     story.append(make_protocol_section(
         "PART 2",
         "Document Exorcist Engine (In-Memory Image Surgery)",
@@ -262,7 +266,35 @@ def generate_pdf(filename="ApplyCopilot_Test_Prompts_Guide.pdf"):
         "Output file generated: test_healed_passport_photo.jpg (32.0 KB, exactly within 20KB-45KB range). HTTP GET /proof/test_healed_passport_photo.jpg returns 200 OK."
     ))
 
-    # 2. Part 1: User Vault
+    # 2. Protocol 08: SOS Medical Emergency Sentinel (NEW FEATURE)
+    story.append(make_protocol_section(
+        "PROTOCOL 08",
+        "Autonomous Medical Emergency & SOS Dispatch Sentinel",
+        "EMERGENCY LIFE-SAVER",
+        "http://localhost:8000/mock/emergency (Live Active Dispatch & CPR Metronome Terminal)",
+        "SOS! Medical emergency, severe chest pain and suspected heart attack. Book ambulance, hospital appointment, and alert kin immediately.",
+        "vault.json (Contains patient Yashwanth K R, Age 23, Blood O+, address at Kumbalagodu, kin Rajesh K R, preferred BGS Gleneagles ER)",
+        "Speak or type the emergency prompt into Cockpit. The agent detects the critical distress trigger, immediately executes life-saving protocols, speaks first-aid instructions, and navigates the browser screencast to http://localhost:8000/mock/emergency.",
+        "1) Issues immediate clinical first-aid guidance (chew 300mg soluble aspirin, sit in W-position, unlock door, do not drive). 2) Autonomously books and dispatches Advanced Cardiac Life Support (ACLS) Ambulance KA-05-EM-1108 (ETA 6m, Lead Suresh Kumar +91 98450 77112). 3) Pre-books priority ER admission at BGS Gleneagles Global Hospital (Cardiac Resuscitation Bay 02, zero-wait triage with Dr. Anand M). 4) Dispatches priority SMS/WhatsApp SOS broadcast with live GPS link to next-of-kin Rajesh K R (+91 98450 11223).",
+        "Browser screencast displays pulsing emergency HUD with real-time countdown timer (ETA: 05:42), active ambulance tracking, pre-cleared ER card, kin alert confirmation, and 110 BPM visual CPR rhythm metronome. Chat delivers complete dispatch summary.",
+        "Terminal execution completed in 8.2 ms. Telemetry status: EMERGENCY_DISPATCHED. All 4 emergency legs confirmed without human delay."
+    ))
+
+    # 3. Resilience: Multi-Key API Pool & Self-Healing Failover (NEW FEATURE)
+    story.append(make_protocol_section(
+        "RESILIENCE",
+        "Dynamic Multi-Key API Pool & Rate-Limit Self-Healing",
+        "FAILOVER ENGINE",
+        "API Status: http://localhost:8000/api/api-pool-status | Management: api_pool.py",
+        "Verify API key pool health and auto-failover status.",
+        ".env (Supports comma-separated GROQ_API_KEYS=key1,key2,key3 or individual GROQ_API_KEY_1, GROQ_API_KEY_2...)",
+        "Add multiple Groq keys into your .env file separated by commas or numbered variables. To test failover, query http://localhost:8000/api/api-pool-status or execute complex multi-turn commands.",
+        "The api_pool engine actively tracks the health of each key. If any key encounters a 429 RateLimitError, connection timeout, or 503 error, the engine automatically quarantines that key with a 45-second cooldown timer and seamlessly routes the request to the next available healthy key. In addition, it cycles through a resilient hierarchy of fallback models (openai/gpt-oss-120b, llama-3.3-70b-versatile, qwen/qwen3.8-27b, openai/gpt-oss-20b, llama-3.1-8b-instant).",
+        "Zero hangs or freezes. Telemetry reports total keys, active healthy keys, cooling keys, and call counts per key. Endpoints: GET /api/api-pool-status and POST /api/api-pool/add-key allow dynamic additions without restart.",
+        "Terminal test: 'python -c \"from api_pool import api_pool; print(api_pool.get_telemetry())\"' displays full health metrics."
+    ))
+
+    # 4. Part 1: User Vault
     story.append(make_protocol_section(
         "PART 1",
         "Environment Setup & Local User Vault",
@@ -276,7 +308,7 @@ def generate_pdf(filename="ApplyCopilot_Test_Prompts_Guide.pdf"):
         "Telemetry confirms zero hallucination of personal data; exact match with vault.json parameters."
     ))
 
-    # 3. Part 3: Anti-Dark-Pattern Fee Stripper
+    # 5. Part 3: Anti-Dark-Pattern Fee Stripper
     story.append(make_protocol_section(
         "PART 3",
         "Anti-Dark-Pattern & Fee Stripper Engine",
@@ -290,7 +322,7 @@ def generate_pdf(filename="ApplyCopilot_Test_Prompts_Guide.pdf"):
         "Verification screenshot generated: cleaned_checkout_proof.png showing all 3 add-on boxes cleanly unchecked."
     ))
 
-    # 4. Part 4: Transit Rush
+    # 6. Part 4: Transit Rush
     story.append(make_protocol_section(
         "PART 4",
         "Transit Rush Protocol Engine (High-Speed Booking)",
@@ -304,7 +336,7 @@ def generate_pdf(filename="ApplyCopilot_Test_Prompts_Guide.pdf"):
         "Verification screenshot generated: transit_rush_proof.png. Execution halted at payment screen without charging user."
     ))
 
-    # 5. Part 5: Air-Gapped Fraud Sentinel
+    # 7. Part 5: Air-Gapped Fraud Sentinel
     story.append(make_protocol_section(
         "PART 5",
         "Air-Gapped Fraud Sentinel & Payment State Machine",
@@ -318,7 +350,7 @@ def generate_pdf(filename="ApplyCopilot_Test_Prompts_Guide.pdf"):
         "Verification screenshot generated: sentinel_halt_proof.png. Agent remains safely halted until human resumes."
     ))
 
-    # 6. Part 6: Jarvis Voice HUD
+    # 8. Part 6: Jarvis Voice HUD
     story.append(make_protocol_section(
         "PART 6",
         "Jarvis Voice HUD & Adaptive Interface",
@@ -332,7 +364,7 @@ def generate_pdf(filename="ApplyCopilot_Test_Prompts_Guide.pdf"):
         "Verify browser console: WebSocket connection established, Screencast frames streaming at 60 FPS."
     ))
 
-    # 7. Part 7: End-to-End Multi-Tab Trajectory
+    # 9. Part 7: End-to-End Multi-Tab Trajectory
     story.append(make_protocol_section(
         "PART 7",
         "End-to-End Multi-Tab Autonomous Trajectory",
@@ -346,7 +378,7 @@ def generate_pdf(filename="ApplyCopilot_Test_Prompts_Guide.pdf"):
         "Telemetry logs show: open_tab -> switch_tab -> read_otp -> switch_tab -> fill_otp -> complete."
     ))
 
-    # 8. Surprise Hurdle 1: Idempotency Sentinel
+    # 10. Surprise Hurdle 1: Idempotency Sentinel
     story.append(make_protocol_section(
         "SURPRISE HURDLE 1",
         "Crash After Submit & Idempotency Sentinel",
@@ -360,7 +392,7 @@ def generate_pdf(filename="ApplyCopilot_Test_Prompts_Guide.pdf"):
         "Zero duplicate charges recorded in ledger. Order status reconciled to CONFIRMED."
     ))
 
-    # 9. Surprise Hurdle 2: Sneaky Fee Interceptor
+    # 11. Surprise Hurdle 2: Sneaky Fee Interceptor
     story.append(make_protocol_section(
         "SURPRISE HURDLE 2",
         "Voice Financial Anchor & Sneaky Fee Interceptor",
@@ -374,7 +406,7 @@ def generate_pdf(filename="ApplyCopilot_Test_Prompts_Guide.pdf"):
         "Air-gap activates. Agent halts execution until user gives explicit voice or text approval for the quiet surcharge."
     ))
 
-    # 10. Surprise Hurdle 3: Ambiguity Clarification Protocol
+    # 12. Surprise Hurdle 3: Ambiguity Clarification Protocol
     story.append(make_protocol_section(
         "SURPRISE HURDLE 3",
         "Voice Ambiguity Clarification Protocol",

@@ -33,6 +33,8 @@ from exorcist import heal_image
 from dark_pattern import run_demo as run_dark_pattern_demo
 from transit_rush import run_transit_rush
 from sentinel import fraud_sentinel, run_demo as run_sentinel_demo
+from sos_sentinel import is_emergency_prompt, sos_engine
+from api_pool import api_pool
 
 app = FastAPI(title="Wormhole Real-Time Agent Server")
 
@@ -186,6 +188,27 @@ latest_mock_email = {
     "time": "Just now",
     "body": "Hello Yashwanth, your single-use verification code for QuickHire Portal is provided below."
 }
+
+@app.get("/mock/emergency", response_class=HTMLResponse)
+async def serve_emergency_mock():
+    mock_file = BASE_DIR / "mock_emergency.html"
+    return HTMLResponse(content=mock_file.read_text(encoding="utf-8"))
+
+@app.get("/api/api-pool-status")
+async def get_api_pool_status():
+    return JSONResponse(api_pool.get_telemetry())
+
+@app.post("/api/api-pool/add-key")
+async def add_api_pool_key(req: Request):
+    data = await req.json()
+    key = data.get("key", "").strip()
+    if not key:
+        return JSONResponse({"status": "ERROR", "message": "No key provided"}, status_code=400)
+    added = api_pool.add_key(key)
+    return JSONResponse({
+        "status": "SUCCESS" if added else "ALREADY_EXISTS",
+        "telemetry": api_pool.get_telemetry()
+    })
 
 @app.get("/mock/portal", response_class=HTMLResponse)
 async def serve_portal_mock():
@@ -480,6 +503,42 @@ async def execute_agent_command(req: Request):
     
     t_start = time.time()
     print(f"\n[AGENT SERVER] Received User Command: \"{prompt}\" (Attached Files: {len(attached_files)})")
+
+    # 0. Protocol 08: Autonomous Medical Emergency & SOS Dispatch Sentinel
+    if is_emergency_prompt(prompt):
+        print(f"[SOS PROTOCOL ENGAGED] Acute Emergency Distress Signal Detected: {prompt}")
+        telemetry = sos_engine.execute_sos_protocol(prompt)
+        asyncio.create_task(agent_core.direct_goto("http://localhost:8000/mock/emergency"))
+        emergency_msg = (
+            f"{telemetry['clinical_guidance']}\n\n"
+            f"🚨 **AUTONOMOUS EMERGENCY DISPATCH COMPLETED**:\n"
+            f"• **Ambulance Dispatched**: `{telemetry['ambulance_dispatch']['vehicle_registration']}` ({telemetry['ambulance_dispatch']['vehicle_type']})\n"
+            f"• **Unit Lead**: {telemetry['ambulance_dispatch']['paramedic_lead']} · Call: `{telemetry['ambulance_dispatch']['driver_contact']}`\n"
+            f"• **Ambulance ETA**: **{telemetry['ambulance_dispatch']['eta_minutes']} Minutes** (Lights & Sirens Priority)\n"
+            f"• **Pre-Booked Hospital ER**: {telemetry['hospital_booking']['hospital_name']}\n"
+            f"• **Assigned ER Bay**: `{telemetry['hospital_booking']['assigned_bay']}` (Zero Wait Reception)\n"
+            f"• **Resuscitation Lead**: {telemetry['hospital_booking']['on_duty_physician']} (Cath Lab & ECG on standby)\n"
+            f"• **Next-of-Kin Notified**: `{telemetry['kin_notification']['recipient_name']}` ({telemetry['kin_notification']['phone']}) via priority SMS with live GPS link\n"
+            f"• **Live Tracking Terminal**: Dispatched on browser screencast (`/mock/emergency`)"
+        )
+        await agent_core.broadcast({
+            "type": "SOS_EMERGENCY_ACTIVATED",
+            "condition": prompt,
+            "telemetry": telemetry
+        })
+        await agent_core.broadcast({
+            "type": "CHAT_RESPONSE",
+            "text": emergency_msg,
+            "reason": "Autonomous medical emergency triage, ambulance booking, hospital admission, and kin alert."
+        })
+        return {
+            "status": "COMPLETED",
+            "protocol": "SOS_MEDICAL_EMERGENCY",
+            "reason": "Ambulance dispatched, hospital ER pre-booked, kin alerted, clinical first-aid delivered.",
+            "details": telemetry,
+            "emergency_portal": "http://localhost:8000/mock/emergency",
+            "duration_ms": telemetry["processing_time_ms"]
+        }
 
     # 1. Compile User Profile & Attached Documents Context across turns
     for af in attached_files:

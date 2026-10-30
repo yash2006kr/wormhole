@@ -34,9 +34,7 @@ from transaction_ledger import transaction_ledger
 from sneaky_fee_guard import extract_voice_approved_amount, audit_and_strip_checkout
 from sentinel import fraud_sentinel
 from exorcist import heal_image
-
-groq_key = os.getenv("GROQ_API_KEY")
-groq_client = Groq(api_key=groq_key)
+from api_pool import api_pool
 
 class AgentCore:
     def __init__(self):
@@ -1607,28 +1605,13 @@ class AgentCore:
         )
         messages.append({"role": "user", "content": user_msg})
 
-        # Try active models with fallback in case of rate limits
-        models_to_try = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]
-        last_error = None
-        for model_name in models_to_try:
-            try:
-                res = groq_client.chat.completions.create(
-                    model=model_name,
-                    messages=messages,
-                    temperature=0.1,
-                    response_format={"type": "json_object"}
-                )
-                parsed = json.loads(res.choices[0].message.content)
-                if isinstance(parsed, list):
-                    parsed = parsed[0] if len(parsed) > 0 else {"action": "finish", "reason": "Empty action list"}
-                return parsed
-            except Exception as e:
-                last_error = e
-                print(f"[!] Groq decision error with model {model_name}: {e}")
-                continue
-
-        print(f"[!] All Groq models failed. Last error: {last_error}")
-        return {"action": "finish", "reason": "Completed trajectory."}
+        # Execute with dynamic multi-key failover and resilient backup models
+        return api_pool.execute_chat_completion(
+            messages=messages,
+            models=["openai/gpt-oss-120b", "llama-3.3-70b-versatile", "qwen/qwen3.8-27b", "openai/gpt-oss-20b", "llama-3.1-8b-instant"],
+            temperature=0.1,
+            response_format={"type": "json_object"}
+        )
 
 # Global Singleton Instance
 agent_core = AgentCore()
