@@ -284,9 +284,9 @@ async def execute_agent_command(req: Request):
     agent_core.attached_files = attached_files or agent_core.session_files
     agent_core.current_context = context_data
 
-    # 2. Check if real website navigation / interaction is requested
-    if any(site in prompt.lower() for site in ["http://", "https://", ".com", ".org", ".in", ".app", "google", "wikipedia", "hackernews", "yash2006kr", "vercel"]):
-        print(f"[AGENT SERVER] Real Website Interaction Task Detected!")
+    # 2. Check if real website navigation / interaction / Q&A is requested
+    if any(site in prompt.lower() for site in ["http://", "https://", ".com", ".org", ".in", ".app", "google", "wikipedia", "hackernews", "yash2006kr", "vercel", "portfolio", "about", "fetch", "who is", "what is", "tell me"]):
+        print(f"[AGENT SERVER] Real Website Interaction & Q&A Task Detected!")
         await agent_core.start_autonomous_task(prompt, context=context_data)
         return {
             "status": "RUNNING",

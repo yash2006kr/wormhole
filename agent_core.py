@@ -327,7 +327,7 @@ class AgentCore:
     # RICH DOM INSPECTOR: EXTRACTS STRUCTURED CONTEXT & INTERACTIVE ELEMENTS
     # --------------------------------------------------------------------------
     async def _get_interactive_dom_elements(self):
-        """Extracts structured DOM: headings, navigation tabs, forms, rich textareas, buttons, and notices."""
+        """Extracts structured DOM: headings, navigation tabs, page & section text, forms, editors, buttons, and notices."""
         if not self.page:
             return ""
         try:
@@ -341,13 +341,13 @@ class AgentCore:
                     return (rect.width > 0 && rect.height > 0) || !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
                 };
 
-                const cleanText = (t) => (t || '').replace(/\\s+/g, ' ').trim().slice(0, 60);
+                const cleanText = (t) => (t || '').replace(/\\s+/g, ' ').trim().slice(0, 100);
 
                 // 1. Page Title & Headings (to understand context & topic)
                 const headings = [];
-                document.querySelectorAll('h1, h2, h3').forEach((h, i) => {
-                    if (i < 8) {
-                        const txt = cleanText(h.innerText);
+                document.querySelectorAll('h1, h2, h3, h4').forEach((h, i) => {
+                    if (i < 12) {
+                        const txt = (h.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 90);
                         if (txt) headings.push(`${h.tagName}: "${txt}"`);
                     }
                 });
@@ -355,17 +355,41 @@ class AgentCore:
                 // 2. Navigation items (Header links, Nav links, Section tabs, Anchor links)
                 const navItems = [];
                 document.querySelectorAll('nav a, header a, a[href^="#"], [role="tab"], [data-page], [data-section], a.nav-link, a').forEach((el, i) => {
-                    if (navItems.length < 20) {
+                    if (navItems.length < 25) {
                         const txt = cleanText(el.innerText || el.getAttribute('aria-label') || el.getAttribute('title'));
                         const href = el.getAttribute('href') || el.getAttribute('data-page') || '';
                         const id = el.id ? '#' + el.id : '';
-                        if (txt && (href.startsWith('#') || href.includes('connect') || href.includes('contact') || href.includes('about') || href.includes('project') || href.includes('apply') || navItems.length < 8)) {
+                        if (txt && (href.startsWith('#') || href.includes('about') || href.includes('creation') || href.includes('project') || href.includes('skill') || href.includes('timeline') || href.includes('connect') || href.includes('contact') || href.includes('apply') || navItems.length < 8)) {
                             navItems.push(`NAV: a${id}[href="${href}"] text="${txt}" [${isVisible(el) ? 'visible' : 'hidden'}]`);
                         }
                     }
                 });
 
-                // 3. Inputs, Textareas, Selects, and Rich ContentEditable Textboxes (Indeed, LinkedIn, Quill, ProseMirror)
+                // 3. Page & Section Text Content (Crucial for Q&A, About details, Bio, Projects, Summaries)
+                const sectionTexts = [];
+                const knownSectionKeywords = ['about', 'bio', 'intro', 'summary', 'creations', 'projects', 'skills', 'experience', 'timeline', 'connect', 'contact', 'faq', 'overview'];
+                knownSectionKeywords.forEach(k => {
+                    const els = document.querySelectorAll(`section#${k}, #${k}, [data-section*="${k}"], [data-page*="${k}"], .${k}, [id*="${k}"]`);
+                    els.forEach(el => {
+                        const raw = (el.innerText || '').replace(/\\s+/g, ' ').trim();
+                        if (raw.length > 25 && !sectionTexts.some(s => s.slice(0, 40) === raw.slice(0, 40))) {
+                            sectionTexts.push(`[SECTION: #${el.id || k}]\\n` + raw.slice(0, 1600));
+                        }
+                    });
+                });
+
+                // Also extract visible paragraphs from active section or article
+                const paragraphs = [];
+                document.querySelectorAll('section.active p, .page-view.active p, main p, article p, p').forEach(p => {
+                    if (paragraphs.length < 10) {
+                        const pt = (p.innerText || '').replace(/\\s+/g, ' ').trim();
+                        if (pt.length > 20 && isVisible(p) && !paragraphs.some(exist => exist.slice(0, 30) === pt.slice(0, 30))) {
+                            paragraphs.push(pt.slice(0, 300));
+                        }
+                    }
+                });
+
+                // 4. Inputs, Textareas, Selects, and Rich ContentEditable Textboxes (Indeed, LinkedIn, Quill, ProseMirror)
                 const formFields = [];
                 document.querySelectorAll('input:not([type="hidden"]), textarea, select, [contenteditable="true"], [role="textbox"]').forEach((el, i) => {
                     if (formFields.length < 30) {
@@ -409,7 +433,7 @@ class AgentCore:
                     }
                 });
 
-                // 4. Buttons & Interactive Clickables
+                // 5. Buttons & Interactive Clickables
                 const buttons = [];
                 document.querySelectorAll('button, input[type="submit"], [role="button"]').forEach((el, i) => {
                     if (buttons.length < 20) {
@@ -423,7 +447,7 @@ class AgentCore:
                     }
                 });
 
-                // 5. Active confirmation / Success / Error notices
+                // 6. Active confirmation / Success / Error notices
                 const notices = [];
                 document.querySelectorAll('.alert, .success, .error, [role="alert"], .notification, .toast, .sent-message').forEach(el => {
                     if (isVisible(el)) {
@@ -435,6 +459,8 @@ class AgentCore:
                 let output = [];
                 if (headings.length) output.push("=== PAGE HEADINGS ===\\n" + headings.join("\\n"));
                 if (navItems.length) output.push("=== NAVIGATION & SECTION LINKS ===\\n" + navItems.join("\\n"));
+                if (sectionTexts.length) output.push("=== PAGE & SECTION TEXT CONTENT ===\\n" + sectionTexts.join("\\n\\n"));
+                else if (paragraphs.length) output.push("=== PAGE & SECTION TEXT CONTENT ===\\n" + paragraphs.join("\\n\\n"));
                 if (formFields.length) output.push("=== FORM INPUT FIELDS & EDITORS ===\\n" + formFields.join("\\n"));
                 if (buttons.length) output.push("=== BUTTONS & SUBMIT CONTROLS ===\\n" + buttons.join("\\n"));
                 if (notices.length) output.push("=== NOTICES ON PAGE ===\\n" + notices.join("\\n"));
@@ -614,6 +640,21 @@ class AgentCore:
                     await asyncio.sleep(1.5)
             except Exception as e:
                 print(f"[!] Initial navigation error: {e}")
+        elif any(k in goal.lower() for k in ["portfolio", "yash2006kr", "yashwanth"]) and self.page:
+            # If user refers to portfolio website without typing the full URL
+            target_initial_url = "https://yash2006kr.vercel.app/"
+            try:
+                curr_host = urlparse(self.page.url or "").netloc
+                if "yash2006kr" not in curr_host:
+                    print(f"[AGENT CORE] Portfolio keyword detected. Navigating directly to {target_initial_url}...")
+                    await self.broadcast({
+                        "type": "LOG",
+                        "message": f"Navigating to portfolio website: {target_initial_url}"
+                    })
+                    await self.page.goto(target_initial_url, wait_until="domcontentloaded", timeout=25000)
+                    await asyncio.sleep(1.5)
+            except Exception as e:
+                print(f"[!] Portfolio navigation error: {e}")
         
         if self.execution_task and not self.execution_task.done():
             self.execution_task.cancel()
@@ -820,9 +861,54 @@ class AgentCore:
                         await self.page.evaluate("window.scrollBy(0, 600)")
                         await asyncio.sleep(0.8)
 
+                    elif action_type in ["respond", "answer", "reply"]:
+                        msg_text = action.get("message") or action.get("text") or action.get("response") or reason
+                        print(f"  -> Agent Answering User in Chat:\n{msg_text}\n")
+                        
+                        # Record response in session memory
+                        timestamp = time.strftime("%H:%M:%S")
+                        self.session_history.append({
+                            "role": "agent",
+                            "text": msg_text,
+                            "time": timestamp
+                        })
+
+                        # Broadcast answer to chat feed
+                        await self.broadcast({
+                            "type": "CHAT_RESPONSE",
+                            "text": msg_text,
+                            "reason": reason
+                        })
+                        
+                        await asyncio.sleep(0.5)
+                        if action.get("finish", True):
+                            await self.broadcast({
+                                "type": "COMPLETE",
+                                "reason": reason,
+                                "has_chat_response": True
+                            })
+                            break
+
                     elif action_type == "finish":
+                        msg_text = action.get("message") or action.get("response") or ""
+                        if not msg_text and any(q_word in self.current_goal.lower() for q_word in ["fetch", "about", "tell me", "what", "who", "give it in chat", "details", "explain", "summarize"]):
+                            msg_text = reason
+                        
+                        if msg_text:
+                            timestamp = time.strftime("%H:%M:%S")
+                            self.session_history.append({
+                                "role": "agent",
+                                "text": msg_text,
+                                "time": timestamp
+                            })
+                            await self.broadcast({
+                                "type": "CHAT_RESPONSE",
+                                "text": msg_text,
+                                "reason": reason
+                            })
+
                         print(f"  -> Task Complete: {reason}")
-                        await self.broadcast({"type": "COMPLETE", "reason": reason})
+                        await self.broadcast({"type": "COMPLETE", "reason": reason, "has_chat_response": bool(msg_text)})
                         break
 
                 except Exception as e:
@@ -858,25 +944,33 @@ class AgentCore:
             }
 
         sys_prompt = (
-            "You are Jarvis-Wormhole, an elite autonomous web navigation, form-filling, and job application agent.\n"
-            "Your objective is to inspect the active web page, understand the user's intent, and execute the exact right sequence of browser actions to achieve the goal.\n\n"
+            "You are Jarvis-Wormhole, an elite autonomous web navigation, form-filling, and web intelligence agent.\n"
+            "Your objective is to inspect the active web page, understand the user's intent, and execute the exact right sequence of browser actions or directly formulate intelligent responses in chat.\n\n"
             "=== COGNITIVE PROTOCOLS ===\n"
-            "1. JOB DESCRIPTION / RESUME SYNTHESIS PROTOCOL:\n"
+            "1. INFORMATION EXTRACTION & CHAT Q&A PROTOCOL (HIGH PRIORITY):\n"
+            "   - If the user asks a question, requests information, or asks to 'fetch about details', 'tell me about', 'what does the page say', 'summarize', 'who is...', 'what skills...', or 'give it in chat':\n"
+            "     * Check the text provided under '=== PAGE & SECTION TEXT CONTENT ==='.\n"
+            "     * If on an SPA where a relevant section (e.g. `a[href='#about']`, `text=About`) is not active, you can click it so it displays in the live screencast, OR if the section text is already present in '=== PAGE & SECTION TEXT CONTENT ===', synthesize the answer immediately!\n"
+            "     * Synthesize a rich, professional, well-formatted response (using markdown bolding `**` and bullet points `•`) providing the exact details, philosophy, bio, skills, education, or facts extracted from the page.\n"
+            "     * Return action 'respond' with your synthesized answer in the 'message' field:\n"
+            "       {\"action\": \"respond\", \"message\": \"Here are the About details from the portfolio:\\n\\n• **Core Philosophy**: ...\\n• **Education & Background**: ...\\n• **Key Specialization**: ...\", \"reason\": \"Extracted requested details from the website and presented to the user in chat.\", \"finish\": true}\n\n"
+            "2. JOB DESCRIPTION / RESUME SYNTHESIS PROTOCOL:\n"
             "   - If the user asks to 'add job description', 'describe the job', 'fill description', or 'post job', AND a candidate resume or profile is provided in context:\n"
             "     * Extract the candidate's core role, domain, technical stack, skills, and qualifications from the uploaded resume.\n"
             "     * Synthesize a comprehensive, professional, complete Job Description tailored to that role (including Role Overview, Key Responsibilities, Required Skills, and Qualifications).\n"
             "     * Target the Job Description editor on the page (e.g. `div[contenteditable='true']`, `[role='textbox']`, `textarea[name*='description' i]`, or `[aria-label*='Job description']`).\n"
             "     * Use action 'fill_form' or 'type' with the complete synthesized job description text to populate the field!\n\n"
-            "2. CONTACT & APPLICATION PROTOCOL:\n"
+            "3. CONTACT & APPLICATION PROTOCOL:\n"
             "   - If the user wants to contact, connect, or hire, map name, email, and message into the fields.\n"
             "   - In Single-Page Applications (SPAs), sections like Contact are often hidden until you click their navigation tab (e.g. `a[href='#connect']`).\n\n"
-            "3. SUPPORTED ACTIONS (JSON):\n"
-            "   1. fill_form: {\"action\": \"fill_form\", \"fields\": {\"field_selector\": \"text_content_to_insert\"}, \"submit_selector\": \"optional_btn\", \"finish_after\": true, \"reason\": \"...\"}\n"
-            "   2. click: {\"action\": \"click\", \"selector\": \"a[href='#...'] or button_selector\", \"reason\": \"...\"}\n"
-            "   3. type: {\"action\": \"type\", \"selector\": \"selector\", \"text\": \"string\", \"press_enter\": false, \"reason\": \"...\"}\n"
-            "   4. navigate: {\"action\": \"navigate\", \"text\": \"https://...\", \"reason\": \"...\"}\n"
-            "   5. scroll: {\"action\": \"scroll\", \"reason\": \"...\"}\n"
-            "   6. finish: {\"action\": \"finish\", \"reason\": \"...\"}\n\n"
+            "4. SUPPORTED ACTIONS (JSON):\n"
+            "   1. respond: {\"action\": \"respond\", \"message\": \"synthesized comprehensive markdown text response to answer user question in chat\", \"reason\": \"...\", \"finish\": true}\n"
+            "   2. fill_form: {\"action\": \"fill_form\", \"fields\": {\"field_selector\": \"text_content_to_insert\"}, \"submit_selector\": \"optional_btn\", \"finish_after\": true, \"reason\": \"...\"}\n"
+            "   3. click: {\"action\": \"click\", \"selector\": \"a[href='#...'] or button_selector\", \"reason\": \"...\"}\n"
+            "   4. type: {\"action\": \"type\", \"selector\": \"selector\", \"text\": \"string\", \"press_enter\": false, \"reason\": \"...\"}\n"
+            "   5. navigate: {\"action\": \"navigate\", \"text\": \"https://...\", \"reason\": \"...\"}\n"
+            "   6. scroll: {\"action\": \"scroll\", \"reason\": \"...\"}\n"
+            "   7. finish: {\"action\": \"finish\", \"reason\": \"...\"}\n\n"
             "Always return valid JSON only."
         )
 
