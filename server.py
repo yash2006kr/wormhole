@@ -524,174 +524,181 @@ async def close_browser_tab(req: Request):
 # ==============================================================================
 @app.post("/api/execute")
 async def execute_agent_command(req: Request):
-    data = await req.json()
-    prompt = data.get("prompt", "").strip()
-    attached_files = data.get("files", [])
-    
-    if not prompt:
-        return JSONResponse({"error": "Empty prompt"}, status_code=400)
-    
     t_start = time.time()
-    print(f"\n[AGENT SERVER] Received User Command: \"{prompt}\" (Attached Files: {len(attached_files)})")
+    try:
+        data = await req.json()
+        prompt = data.get("prompt", "").strip()
+        attached_files = data.get("files", [])
+        
+        if not prompt:
+            return JSONResponse({"error": "Empty prompt"}, status_code=400)
+        
+        print(f"\n[AGENT SERVER] Received User Command: \"{prompt}\" (Attached Files: {len(attached_files)})")
 
-    # 0. Protocol 08: Autonomous Medical Emergency & SOS Dispatch Sentinel
-    if is_emergency_prompt(prompt):
-        print(f"[SOS PROTOCOL ENGAGED] Acute Emergency Distress Signal Detected: {prompt}")
-        telemetry = sos_engine.execute_sos_protocol(prompt)
-        asyncio.create_task(agent_core.direct_goto("http://localhost:8000/mock/emergency"))
-        emergency_msg = (
-            f"{telemetry['clinical_guidance']}\n\n"
-            f"🚨 **AUTONOMOUS EMERGENCY DISPATCH COMPLETED**:\n"
-            f"• **Ambulance Dispatched**: `{telemetry['ambulance_dispatch']['vehicle_registration']}` ({telemetry['ambulance_dispatch']['vehicle_type']})\n"
-            f"• **Unit Lead**: {telemetry['ambulance_dispatch']['paramedic_lead']} · Call: `{telemetry['ambulance_dispatch']['driver_contact']}`\n"
-            f"• **Ambulance ETA**: **{telemetry['ambulance_dispatch']['eta_minutes']} Minutes** (Lights & Sirens Priority)\n"
-            f"• **Pre-Booked Hospital ER**: {telemetry['hospital_booking']['hospital_name']}\n"
-            f"• **Assigned ER Bay**: `{telemetry['hospital_booking']['assigned_bay']}` (Zero Wait Reception)\n"
-            f"• **Resuscitation Lead**: {telemetry['hospital_booking']['on_duty_physician']} (Cath Lab & ECG on standby)\n"
-            f"• **Next-of-Kin Notified**: `{telemetry['kin_notification']['recipient_name']}` ({telemetry['kin_notification']['phone']}) via priority SMS with live GPS link\n"
-            f"• **Live Tracking Terminal**: Dispatched on browser screencast (`/mock/emergency`)"
-        )
-        await agent_core.broadcast({
-            "type": "SOS_EMERGENCY_ACTIVATED",
-            "condition": prompt,
-            "telemetry": telemetry
-        })
-        await agent_core.broadcast({
-            "type": "CHAT_RESPONSE",
-            "text": emergency_msg,
-            "reason": "Autonomous medical emergency triage, ambulance booking, hospital admission, and kin alert."
-        })
-        return {
-            "status": "COMPLETED",
-            "protocol": "SOS_MEDICAL_EMERGENCY",
-            "reason": "Ambulance dispatched, hospital ER pre-booked, kin alerted, clinical first-aid delivered.",
-            "details": telemetry,
-            "emergency_portal": "http://localhost:8000/mock/emergency",
-            "duration_ms": telemetry["processing_time_ms"]
-        }
-
-    # 1. Compile User Profile & Attached Documents Context across turns
-    for af in attached_files:
-        txt = af.get("extracted_text", "")
-        name = af.get("name", "document")
-        if txt and txt not in agent_core.session_context:
-            agent_core.session_context += f"\n--- RESUME / ATTACHED FILE CONTENT ({name}) ---\n{txt}\n"
-
-    # Ingest candidate credentials from vault.json as default knowledge
-    context_data = agent_core.session_context
-    vault_file = BASE_DIR / "vault.json"
-    if vault_file.exists():
-        try:
-            v_data = json.loads(vault_file.read_text(encoding="utf-8"))
-            prof = v_data.get("profile") or v_data.get("candidate_profile", {})
-            acad = v_data.get("academic") or prof.get("academic", {})
-            addr = v_data.get("address", {})
-            transit = v_data.get("transit_preferences", {})
-            context_data += (
-                f"\n--- SENDER CANDIDATE CREDENTIALS (FROM USER VAULT) ---\n"
-                f"Full Name: {prof.get('full_name') or prof.get('name', 'Yashwanth K R')}\n"
-                f"Date of Birth: {prof.get('dob', '2003-08-14')} (Age: {prof.get('age', 23)})\n"
-                f"Gender: {prof.get('gender', 'Male')}\n"
-                f"Masked ID / Aadhaar: {prof.get('aadhaar_masked', 'XXXX-XXXX-8921')}\n"
-                f"Email Address: {prof.get('email', 'yashwanth.kr.dbit@gmail.com')}\n"
-                f"Phone: {prof.get('phone', '+91 98450 12345')}\n"
-                f"Institution: {acad.get('institution', 'Don Bosco Institute of Technology (DBIT)')}\n"
-                f"Course / Branch: {acad.get('course', 'B.Tech')} in {acad.get('branch', 'Computer Science & Engineering')}\n"
-                f"Current Year: {acad.get('current_year', '4th Year / 8th Semester')}\n"
-                f"B.Tech CGPA: {acad.get('cgpa', '8.85')} (Top 5%)\n"
-                f"Class 10th Score: {acad.get('tenth_percentage', '92.4%')}\n"
-                f"Class 12th Score: {acad.get('twelfth_percentage', '89.6%')}\n"
-                f"Technical Skills: {', '.join(acad.get('skills', ['Python', 'FastAPI', 'Agentic AI', 'Playwright']))}\n"
-                f"Address: {addr.get('line1', 'Kumbalagodu, Mysore Road')}, {addr.get('city', 'Bengaluru')}, {addr.get('state', 'Karnataka')} - {addr.get('pincode', '560074')}\n"
-                f"Transit Origin: {transit.get('default_origin', 'Bengaluru')}, Destination: {transit.get('default_destination', 'Mysuru')}, Berth: {transit.get('preferred_berth', 'Lower Sleeper')}\n"
+        # 0. Protocol 08: Autonomous Medical Emergency & SOS Dispatch Sentinel
+        if is_emergency_prompt(prompt):
+            print(f"[SOS PROTOCOL ENGAGED] Acute Emergency Distress Signal Detected: {prompt}")
+            telemetry = sos_engine.execute_sos_protocol(prompt)
+            asyncio.create_task(agent_core.direct_goto("http://localhost:8000/mock/emergency"))
+            amb = telemetry.get("ambulance_dispatch", {})
+            hosp = telemetry.get("hospital_booking", {})
+            kin = telemetry.get("kin_notification", {})
+            emergency_msg = (
+                f"{telemetry.get('clinical_guidance', '')}\n\n"
+                f"🚨 **AUTONOMOUS EMERGENCY DISPATCH COMPLETED**:\n"
+                f"• **Ambulance Dispatched**: `{amb.get('vehicle_registration')}` ({amb.get('vehicle_type')})\n"
+                f"• **Unit Lead**: {amb.get('paramedic_lead')} · Call: `{amb.get('driver_contact')}`\n"
+                f"• **Ambulance ETA**: **{amb.get('eta_minutes')} Minutes** (Priority Sirens)\n"
+                f"• **Pre-Booked Hospital ER**: {hosp.get('hospital_name')}\n"
+                f"• **Assigned ER Bay**: `{hosp.get('assigned_bay')}` (Zero Wait Reception)\n"
+                f"• **Resuscitation Lead**: {hosp.get('on_duty_physician')} (Cath Lab & ECG on standby)\n"
+                f"• **Next-of-Kin Notified**: `{kin.get('recipient_name')}` ({kin.get('phone')}) via priority SMS with live GPS link\n"
+                f"• **Live Tracking Terminal**: Dispatched on browser screencast (/mock/emergency)"
             )
-        except Exception as e:
-            print(f"[!] Error reading vault.json: {e}")
+            await agent_core.broadcast({
+                "type": "SOS_EMERGENCY_ACTIVATED",
+                "condition": prompt,
+                "telemetry": telemetry
+            })
+            await agent_core.broadcast({
+                "type": "CHAT_RESPONSE",
+                "text": emergency_msg,
+                "reason": "Autonomous medical emergency triage, ambulance booking, hospital admission, and kin alert."
+            })
+            return JSONResponse({
+                "status": "COMPLETED",
+                "protocol": "SOS_MEDICAL_EMERGENCY",
+                "reason": "Ambulance dispatched, hospital ER pre-booked, kin alerted, clinical first-aid delivered.",
+                "details": telemetry,
+                "emergency_portal": "http://localhost:8000/mock/emergency",
+                "duration_ms": telemetry.get("processing_time_ms", 0)
+            })
 
-    # Store in agent core
-    agent_core.attached_files = attached_files or agent_core.session_files
-    agent_core.current_context = context_data
+        # 1. Compile User Profile & Attached Documents Context across turns
+        for af in attached_files:
+            txt = af.get("extracted_text", "")
+            name = af.get("name", "document")
+            if txt and txt not in agent_core.session_context:
+                agent_core.session_context += f"\n--- RESUME / ATTACHED FILE CONTENT ({name}) ---\n{txt}\n"
 
-    # 2. Check if real website navigation / interaction / Q&A is requested
-    if any(site in prompt.lower() for site in ["http://", "https://", ".com", ".org", ".in", ".app", "google", "wikipedia", "hackernews", "yash2006kr", "vercel", "portfolio", "about", "fetch", "who is", "what is", "tell me"]):
-        print(f"[AGENT SERVER] Real Website Interaction & Q&A Task Detected!")
+        # Ingest candidate credentials from vault.json as default knowledge
+        context_data = agent_core.session_context
+        vault_file = BASE_DIR / "vault.json"
+        if vault_file.exists():
+            try:
+                v_data = json.loads(vault_file.read_text(encoding="utf-8"))
+                prof = v_data.get("profile") or v_data.get("candidate_profile", {})
+                acad = v_data.get("academic") or prof.get("academic", {})
+                addr = v_data.get("address", {})
+                transit = v_data.get("transit_preferences", {})
+                context_data += (
+                    f"\n--- SENDER CANDIDATE CREDENTIALS (FROM USER VAULT) ---\n"
+                    f"Full Name: {prof.get('full_name') or prof.get('name', 'Yashwanth K R')}\n"
+                    f"Date of Birth: {prof.get('dob', '2003-08-14')} (Age: {prof.get('age', 23)})\n"
+                    f"Gender: {prof.get('gender', 'Male')}\n"
+                    f"Masked ID / Aadhaar: {prof.get('aadhaar_masked', 'XXXX-XXXX-8921')}\n"
+                    f"Email Address: {prof.get('email', 'yashwanth.kr.dbit@gmail.com')}\n"
+                    f"Phone: {prof.get('phone', '+91 98450 12345')}\n"
+                    f"Institution: {acad.get('institution', 'Don Bosco Institute of Technology (DBIT)')}\n"
+                    f"Course / Branch: {acad.get('course', 'B.Tech')} in {acad.get('branch', 'Computer Science & Engineering')}\n"
+                    f"Current Year: {acad.get('current_year', '4th Year / 8th Semester')}\n"
+                    f"B.Tech CGPA: {acad.get('cgpa', '8.85')} (Top 5%)\n"
+                    f"Class 10th Score: {acad.get('tenth_percentage', '92.4%')}\n"
+                    f"Class 12th Score: {acad.get('twelfth_percentage', '89.6%')}\n"
+                    f"Technical Skills: {', '.join(acad.get('skills', ['Python', 'FastAPI', 'Agentic AI', 'Playwright']))}\n"
+                    f"Address: {addr.get('line1', 'Kumbalagodu, Mysore Road')}, {addr.get('city', 'Bengaluru')}, {addr.get('state', 'Karnataka')} - {addr.get('pincode', '560074')}\n"
+                    f"Transit Origin: {transit.get('default_origin', 'Bengaluru')}, Destination: {transit.get('default_destination', 'Mysuru')}, Berth: {transit.get('preferred_berth', 'Lower Sleeper')}\n"
+                )
+            except Exception as e:
+                print(f"[!] Error reading vault.json: {e}")
+
+        # Store in agent core
+        agent_core.attached_files = attached_files or agent_core.session_files
+        agent_core.current_context = context_data
+
+        p_lower = prompt.lower()
+
+        # Explicit Mock Benchmark 1: Document Exorcist (photo healing)
+        if any(k in p_lower for k in ["heal photo", "fix passport", "compress photo", "passport photo", "document exorcist test"]):
+            input_test_file = BASE_DIR / "test_oversized_photo.jpg"
+            if attached_files and Path(attached_files[0].get("path", "")).exists():
+                input_test_file = Path(attached_files[0]["path"])
+                print(f"[DOC EXORCIST] Healing user uploaded photo: {input_test_file}")
+
+            output_file = BASE_DIR / "test_healed_passport_photo.jpg"
+            telemetry = await asyncio.to_thread(heal_image, str(input_test_file), str(output_file), 20, 48)
+            return JSONResponse({
+                "status": "COMPLETED",
+                "protocol": "DOC_EXORCIST",
+                "reason": "Document Exorcist healed upload to compliant 32KB.",
+                "details": telemetry,
+                "proof_image": "/proof/test_healed_passport_photo.jpg",
+                "payment_gate_active": False,
+                "duration_ms": round((time.time() - t_start) * 1000, 1)
+            })
+
+        # Explicit Mock Benchmark 2: Anti-Dark-Pattern Fee Stripper
+        elif any(k in p_lower for k in ["mock checkout", "test dark pattern", "test sneaky fee", "benchmark dark pattern", "demo dark pattern"]):
+            telemetry = await asyncio.to_thread(run_dark_pattern_demo, "mock_checkout.html", True)
+            return JSONResponse({
+                "status": "COMPLETED",
+                "protocol": "ANTI_DARK_PATTERN",
+                "reason": "Anti-Dark-Pattern engine stripped deceptive fees.",
+                "details": telemetry,
+                "proof_image": "/proof/cleaned_checkout_proof.png",
+                "payment_gate_active": True,
+                "duration_ms": round((time.time() - t_start) * 1000, 1)
+            })
+
+        # Explicit Mock Benchmark 3: Transit Rush KSRTC Reservation Mock
+        elif any(k in p_lower for k in ["mock ksrtc", "test transit rush", "benchmark transit", "demo transit rush", "test ksrtc"]):
+            telemetry = await asyncio.to_thread(run_transit_rush, "mock_ksrtc.html", True)
+            return JSONResponse({
+                "status": "COMPLETED",
+                "protocol": "TRANSIT_RUSH",
+                "reason": "Transit Rush reserved berths 14A/14B and stripped dark-pattern fees.",
+                "details": telemetry,
+                "proof_image": "/proof/transit_rush_proof.png",
+                "payment_gate_active": True,
+                "duration_ms": round((time.time() - t_start) * 1000, 1)
+            })
+
+        # Explicit Mock Benchmark 4: Air-Gapped Fraud Sentinel Mock
+        elif any(k in p_lower for k in ["mock sentinel", "test sentinel", "demo sentinel", "test fraud"]):
+            target_check = "http://localhost:8000/mock/checkout"
+            telemetry = await asyncio.to_thread(run_sentinel_demo, target_check, True)
+            return JSONResponse({
+                "status": "COMPLETED",
+                "protocol": "FRAUD_SENTINEL",
+                "reason": "Air-Gapped Fraud Sentinel intercepted financial payment gateway and froze state before payment.",
+                "details": telemetry,
+                "proof_image": "/proof/sentinel_halt_proof.png",
+                "payment_gate_active": True,
+                "duration_ms": round((time.time() - t_start) * 1000, 1)
+            })
+
+        # ALL OTHER COMMANDS (including 'open abhibus', 'suno ai', 'biryani', searches, real tasks):
+        # Dispatch to live autonomous agent core on real browser
+        print(f"[AGENT SERVER] Dispatching live autonomous task on real browser for: \"{prompt}\"")
         await agent_core.start_autonomous_task(prompt, context=context_data)
-        return {
+        return JSONResponse({
             "status": "RUNNING",
-            "protocol": "LIVE_WEB_NAVIGATION",
-            "reason": f"Autonomous trajectory initiated on real browser for: {prompt}",
+            "protocol": "AUTONOMOUS_EXECUTION",
+            "reason": f"Agent dispatched on goal: {prompt}",
             "live_stream": True,
             "duration_ms": round((time.time() - t_start) * 1000, 1)
-        }
+        })
 
-    # 3. Protocol 04: Document Exorcist (Auto-heal photos)
-    if "photo" in prompt.lower() or "gate" in prompt.lower() or "kb" in prompt.lower() or "image" in prompt.lower():
-        input_test_file = BASE_DIR / "test_oversized_photo.jpg"
-        if attached_files and Path(attached_files[0].get("path", "")).exists():
-            input_test_file = Path(attached_files[0]["path"])
-            print(f"[DOC EXORCIST] Healing user uploaded photo: {input_test_file}")
-
-        output_file = BASE_DIR / "test_healed_passport_photo.jpg"
-        telemetry = await asyncio.to_thread(heal_image, str(input_test_file), str(output_file), 20, 48)
-        return {
-            "status": "COMPLETED",
-            "protocol": "DOC_EXORCIST",
-            "reason": "Document Exorcist healed upload to compliant 32KB.",
-            "details": telemetry,
-            "proof_image": "/proof/test_healed_passport_photo.jpg",
-            "payment_gate_active": False,
-            "duration_ms": round((time.time() - t_start) * 1000, 1)
-        }
-
-    # 4. Protocol 05: Anti-Dark-Pattern Fee Stripper
-    elif "insurance" in prompt.lower() or "fee" in prompt.lower() or "clean" in prompt.lower() or "dark" in prompt.lower():
-        telemetry = await asyncio.to_thread(run_dark_pattern_demo, "mock_checkout.html", True)
-        return {
-            "status": "COMPLETED",
-            "protocol": "ANTI_DARK_PATTERN",
-            "reason": "Anti-Dark-Pattern engine stripped deceptive fees.",
-            "details": telemetry,
-            "proof_image": "/proof/cleaned_checkout_proof.png",
-            "payment_gate_active": True,
-            "duration_ms": round((time.time() - t_start) * 1000, 1)
-        }
-
-    # 5. Protocol 01: Transit Rush KSRTC Reservation
-    elif "ksrtc" in prompt.lower() or "bus" in prompt.lower() or "transit" in prompt.lower() or "sleeper" in prompt.lower():
-        telemetry = await asyncio.to_thread(run_transit_rush, "mock_ksrtc.html", True)
-        return {
-            "status": "COMPLETED",
-            "protocol": "TRANSIT_RUSH",
-            "reason": "Transit Rush reserved berths 14A/14B and stripped dark-pattern fees.",
-            "details": telemetry,
-            "proof_image": "/proof/transit_rush_proof.png",
-            "payment_gate_active": True,
-            "duration_ms": round((time.time() - t_start) * 1000, 1)
-        }
-
-    # 6. Protocol 03: Air-Gapped Fraud Sentinel & Payment Watchdog
-    elif "sentinel" in prompt.lower() or "fraud" in prompt.lower() or "air-gap" in prompt.lower() or "watchdog" in prompt.lower():
-        target_check = "http://localhost:8000/mock/checkout"
-        telemetry = await asyncio.to_thread(run_sentinel_demo, target_check, True)
-        return {
-            "status": "COMPLETED",
-            "protocol": "FRAUD_SENTINEL",
-            "reason": "Air-Gapped Fraud Sentinel intercepted financial payment gateway and froze state before payment.",
-            "details": telemetry,
-            "proof_image": "/proof/sentinel_halt_proof.png",
-            "payment_gate_active": True,
-            "duration_ms": round((time.time() - t_start) * 1000, 1)
-        }
-
-    # Default fallback: Execute as general browser goal
-    await agent_core.start_autonomous_task(prompt, context=context_data)
-    return {
-        "status": "RUNNING",
-        "protocol": "AUTONOMOUS_EXECUTION",
-        "reason": f"Agent dispatched on goal: {prompt}",
-        "live_stream": True,
-        "duration_ms": round((time.time() - t_start) * 1000, 1)
-    }
+    except Exception as e:
+        print(f"[AGENT SERVER ERROR] Unexpected error in execute_agent_command: {e}")
+        return JSONResponse({
+            "status": "ERROR",
+            "protocol": "SYSTEM_GUARDRAIL",
+            "message": f"Execution notice: {str(e)}",
+            "reason": str(e),
+            "live_stream": True,
+            "duration_ms": round((time.time() - t_start) * 1000, 1) if 't_start' in locals() else 0
+        }, status_code=200)
 
 if __name__ == "__main__":
     import uvicorn

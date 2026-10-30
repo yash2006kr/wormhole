@@ -3,7 +3,7 @@
     {
       "tx_id": "TX-1793376183428",
       "idempotency_key": "1b154511199f4764",
-      "status": "IN_FLIGHT_SUBMITTED",
+      "status": "RECONCILED_SUCCESS",
       "timestamp": "2026-10-30 21:33:03",
       "url": "http://localhost:8000/mock/checkout",
       "selector": "#btn-pay",
@@ -12,8 +12,9 @@
       "currency": "INR",
       "order_id": "ORD-TEST-001",
       "goal": "Pay for ticket",
-      "reconciled": false,
-      "reconciliation_notes": ""
+      "reconciled": true,
+      "reconciliation_notes": "Benchmark test closed",
+      "reconciled_time": "2026-10-31 03:44:56"
     }
   ]
 }

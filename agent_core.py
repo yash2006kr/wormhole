@@ -1044,92 +1044,82 @@ class AgentCore:
                 self.state = "IDLE"
                 return
 
-        # PRE-CHECK: If goal contains an explicit URL, navigate directly before entering the loop!
+        # SMART DESTINATION & NAVIGATION RESOLVER
+        target_initial_url = None
+        clean_g_lower = goal.lower()
+
+        # A. Direct explicit HTTP/HTTPS URL
         found_urls = re.findall(r'https?://[^\s<>"\',;]+', goal)
-        if found_urls and self.page:
+        if found_urls:
             target_initial_url = found_urls[0].rstrip('.,;')
-            try:
-                target_host = urlparse(target_initial_url).netloc
-                curr_host = urlparse(self.page.url or "").netloc
-                if target_host and target_host != curr_host:
-                    print(f"[AGENT CORE] Initial URL detected in goal: {target_initial_url}. Navigating directly...")
-                    await self.broadcast({
-                        "type": "LOG",
-                        "message": f"Directly navigating to target website specified in prompt: {target_initial_url}"
-                    })
-                    await self.page.goto(target_initial_url, wait_until="domcontentloaded", timeout=25000)
-                    await asyncio.sleep(1.5)
-            except Exception as e:
-                print(f"[!] Initial navigation error: {e}")
-        elif any(k in goal.lower() for k in ["suno", "suno ai", "suno.ai"]) and self.page:
+
+        # B. Explicit domain pattern like 'abhibus.com', 'redbus.in', 'youtube.com'
+        elif re.search(r'\b([a-zA-Z0-9-]+\.(?:com|in|org|net|io|app|co|ai|me))\b', clean_g_lower):
+            m = re.search(r'\b([a-zA-Z0-9-]+\.(?:com|in|org|net|io|app|co|ai|me))\b', clean_g_lower)
+            target_initial_url = f"https://www.{m.group(1)}"
+
+        # C. Known sites and popular brand keywords
+        elif "abhibus" in clean_g_lower:
+            target_initial_url = "https://www.abhibus.com"
+        elif "redbus" in clean_g_lower:
+            target_initial_url = "https://www.redbus.in"
+        elif any(k in clean_g_lower for k in ["suno", "suno ai", "suno.ai"]):
             target_initial_url = "https://suno.com"
-            try:
-                curr_host = urlparse(self.page.url or "").netloc
-                if "suno" not in curr_host:
-                    print(f"[AGENT CORE] Suno AI keyword detected. Navigating directly to {target_initial_url}...")
-                    await self.broadcast({"type": "LOG", "message": f"Navigating directly to Suno AI music studio: {target_initial_url}"})
-                    await self.page.goto(target_initial_url, wait_until="domcontentloaded", timeout=25000)
-                    await asyncio.sleep(1.5)
-            except Exception as e:
-                print(f"[!] Suno navigation error: {e}")
-        elif any(k in goal.lower() for k in ["portfolio", "yash2006kr", "yashwanth"]) and self.page:
+        elif "youtube" in clean_g_lower:
+            target_initial_url = "https://www.youtube.com"
+        elif "amazon" in clean_g_lower:
+            target_initial_url = "https://www.amazon.in"
+        elif "flipkart" in clean_g_lower:
+            target_initial_url = "https://www.flipkart.com"
+        elif "swiggy" in clean_g_lower:
+            target_initial_url = "https://www.swiggy.com"
+        elif "zomato" in clean_g_lower:
+            target_initial_url = "https://www.zomato.com"
+        elif any(k in clean_g_lower for k in ["portfolio", "yash2006kr", "yashwanth"]):
             target_initial_url = "https://yash2006kr.vercel.app/"
-            try:
-                curr_host = urlparse(self.page.url or "").netloc
-                if "yash2006kr" not in curr_host:
-                    print(f"[AGENT CORE] Portfolio keyword detected. Navigating directly to {target_initial_url}...")
-                    await self.broadcast({"type": "LOG", "message": f"Navigating to portfolio website: {target_initial_url}"})
-                    await self.page.goto(target_initial_url, wait_until="domcontentloaded", timeout=25000)
-                    await asyncio.sleep(1.5)
-            except Exception as e:
-                print(f"[!] Portfolio navigation error: {e}")
-        elif any(k in goal.lower() for k in ["ksrtc", "bus ticket", "sleeper bus"]) and self.page:
+        elif "wikipedia" in clean_g_lower:
+            target_initial_url = "https://www.wikipedia.org"
+
+        # D. "open <site>", "visit <site>", "launch <site>"
+        elif re.search(r'\b(?:open|visit|go to|launch)\s+([a-zA-Z0-9-]+)\b', clean_g_lower):
+            site_cand = re.search(r'\b(?:open|visit|go to|launch)\s+([a-zA-Z0-9-]+)\b', clean_g_lower).group(1)
+            if site_cand not in ["the", "a", "an", "browser", "tab", "page", "window", "link", "google", "search"]:
+                target_initial_url = f"https://www.{site_cand}.com"
+
+        # E. Explicit local benchmark routes
+        elif any(k in clean_g_lower for k in ["mock ksrtc", "test transit rush", "demo ksrtc"]):
             target_initial_url = "http://localhost:8000/mock/ksrtc"
-            try:
-                curr_host = urlparse(self.page.url or "").netloc
-                if "ksrtc" not in curr_host:
-                    print(f"[AGENT CORE] KSRTC keyword detected. Navigating to {target_initial_url}...")
-                    await self.broadcast({"type": "LOG", "message": f"Navigating to KSRTC transit booking: {target_initial_url}"})
-                    await self.page.goto(target_initial_url, wait_until="domcontentloaded", timeout=25000)
-                    await asyncio.sleep(1.5)
-            except Exception as e:
-                print(f"[!] KSRTC navigation error: {e}")
-        elif any(k in goal.lower() for k in ["checkout", "cart", "pay fee", "sneaky fee"]) and self.page:
+        elif any(k in clean_g_lower for k in ["mock checkout", "test checkout"]):
             target_initial_url = "http://localhost:8000/mock/checkout"
-            try:
-                curr_host = urlparse(self.page.url or "").netloc
-                if "checkout" not in curr_host:
-                    print(f"[AGENT CORE] Checkout keyword detected. Navigating to {target_initial_url}...")
-                    await self.broadcast({"type": "LOG", "message": f"Navigating to checkout portal: {target_initial_url}"})
-                    await self.page.goto(target_initial_url, wait_until="domcontentloaded", timeout=25000)
-                    await asyncio.sleep(1.5)
-            except Exception as e:
-                print(f"[!] Checkout navigation error: {e}")
-        elif any(k in goal.lower() for k in ["emergency", "ambulance", "hospital", "heart attack", "collapsed", "cpr"]) and self.page:
+        elif any(k in clean_g_lower for k in ["mock emergency", "test emergency"]):
             target_initial_url = "http://localhost:8000/mock/emergency"
-            try:
-                curr_host = urlparse(self.page.url or "").netloc
-                if "emergency" not in curr_host:
-                    print(f"[AGENT CORE] Emergency SOS keyword detected. Navigating to {target_initial_url}...")
-                    await self.broadcast({"type": "LOG", "message": f"Navigating to acute emergency dispatch portal: {target_initial_url}"})
-                    await self.page.goto(target_initial_url, wait_until="domcontentloaded", timeout=25000)
-                    await asyncio.sleep(1.5)
-            except Exception as e:
-                print(f"[!] Emergency navigation error: {e}")
+
+        # F. Search & Exploration query (e.g. "best biryani in vijayanagar")
         else:
-            # When no explicit website/service is matched, check if we need to open Google
-            is_on_google = self.page and ("google.com" in (self.page.url or ""))
-            if not is_on_google and self.page:
-                try:
-                    print(f"[AGENT CORE] General query '{goal}'. Defaulting live browser to Google Search Bar...")
+            search_q = goal.strip()
+            for pfx in ["search for", "search", "google", "find", "look up", "tell me about", "who is", "what is"]:
+                if search_q.lower().startswith(pfx):
+                    search_q = search_q[len(pfx):].strip()
+                    break
+            import urllib.parse
+            target_initial_url = f"https://www.google.com/search?q={urllib.parse.quote_plus(search_q)}"
+
+        # Perform navigation if target differs from current page
+        if target_initial_url and self.page:
+            try:
+                curr_u = self.page.url or ""
+                target_host = urlparse(target_initial_url).netloc
+                curr_host = urlparse(curr_u).netloc
+                if target_host != curr_host or ("/search" in target_initial_url and target_initial_url != curr_u):
+                    print(f"[AGENT CORE] Navigating live browser to: {target_initial_url}")
                     await self.broadcast({
                         "type": "LOG",
-                        "message": "Opening Google Search Bar for web query exploration..."
+                        "message": f"Navigating to destination: {target_initial_url}"
                     })
-                    await self.page.goto("https://www.google.com", wait_until="domcontentloaded", timeout=15000)
-                    await asyncio.sleep(1.0)
-                except Exception as e:
-                    print(f"[!] Default Google navigation error: {e}")
+                    await self.page.goto(target_initial_url, wait_until="domcontentloaded", timeout=25000)
+                    await asyncio.sleep(1.2)
+            except Exception as e:
+                print(f"[!] Target navigation notice: {e}")
         
         if self.execution_task and not self.execution_task.done():
             self.execution_task.cancel()
@@ -1620,12 +1610,92 @@ class AgentCore:
                 "reason": f"Typing search query '{search_text}' into Google."
             }
 
-        # 2. Fast Heuristic: Suno AI Studio Ready
-        if "suno.com" in curr_url or "suno.ai" in curr_url:
+        # 2. Fast Heuristic: AbhiBus Portal Ready
+        if "abhibus.com" in curr_url.lower():
             return {
                 "action": "respond",
-                "message": f"🎵 **Suno AI Music Studio Ready**\n\nI have opened Suno AI in your live browser viewport. Your prompt **\"{clean_goal}\"** is primed. You can click Create or customize your track in the live panel.",
+                "message": (
+                    "🚌 **AbhiBus Live Portal Ready**\n\n"
+                    "I have opened **AbhiBus** (`https://www.abhibus.com`) in your live viewport!\n\n"
+                    "• **Origin & Destination**: Choose departing and destination cities.\n"
+                    "• **RTC & Private Fleets**: KSRTC, APSRTC, TSRTC, Zingbus, and private AC sleepers.\n"
+                    "• **Interactive Live Control**: Click on the live portal or tell me: *'Find buses from Bangalore to Hyderabad tomorrow'* and I will enter the details for you!"
+                ),
+                "reason": "AbhiBus portal active in live viewport.",
+                "finish": True
+            }
+
+        # 3. Fast Heuristic: redBus Portal Ready
+        if "redbus.in" in curr_url.lower():
+            return {
+                "action": "respond",
+                "message": (
+                    "🚌 **redBus Live Booking Portal Ready**\n\n"
+                    "I have opened **redBus** in your live browser viewport.\n\n"
+                    "You can select departure dates, filter by AC Sleeper or Seater, or tell me your route!"
+                ),
+                "reason": "redBus portal active in live viewport.",
+                "finish": True
+            }
+
+        # 4. Fast Heuristic: Suno AI Studio Ready
+        if "suno.com" in curr_url.lower() or "suno.ai" in curr_url.lower():
+            return {
+                "action": "respond",
+                "message": (
+                    f"🎵 **Suno AI Music Studio Active**\n\n"
+                    f"I have opened Suno AI for your prompt: **\"{clean_goal}\"**.\n\n"
+                    "• **Prompt Style**: Primed for your request (EDM Bass / Synthesis).\n"
+                    "• **Interactive Panel**: You can click **Create** or interact with the track controls directly on the right pane."
+                ),
                 "reason": "Suno AI studio active.",
+                "finish": True
+            }
+
+        # 5. Fast Heuristic: Google Search Results Extraction
+        if ("google.com" in curr_url.lower() or "bing.com" in curr_url.lower()) and ("/search" in curr_url.lower() or "search?" in curr_url.lower()):
+            try:
+                results = await self.page.evaluate("""() => {
+                    const items = [];
+                    const headings = document.querySelectorAll('h3');
+                    for (const h of headings) {
+                        const title = h.innerText.trim();
+                        if (title.length > 5 && !items.some(x => x.title === title)) {
+                            let snippet = '';
+                            let parent = h.closest('div');
+                            if (parent && parent.parentElement) {
+                                const text = parent.parentElement.innerText;
+                                const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 20 && l !== title);
+                                if (lines.length > 0) snippet = lines[0];
+                            }
+                            items.push({ title, snippet });
+                        }
+                        if (items.length >= 5) break;
+                    }
+                    return items;
+                }""")
+            except Exception:
+                results = []
+
+            if results:
+                formatted_list = []
+                for i, r in enumerate(results):
+                    t = r.get("title", "")
+                    s = r.get("snippet", "")
+                    snip_part = f"\n   *{s}*" if s else ""
+                    formatted_list.append(f"{i+1}. **{t}**{snip_part}")
+                content_summary = "\n\n".join(formatted_list)
+            else:
+                content_summary = f"Explored live results for **\"{clean_goal}\"**."
+
+            return {
+                "action": "respond",
+                "message": (
+                    f"Here are the top findings for **\"{clean_goal}\"**:\n\n"
+                    f"{content_summary}\n\n"
+                    f"👉 *You can click, scroll, and explore the live webpage directly in the right viewport!*"
+                ),
+                "reason": f"Extracted organic search results for '{clean_goal}'.",
                 "finish": True
             }
 

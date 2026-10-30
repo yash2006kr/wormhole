@@ -1,26 +1,51 @@
 """
-ApplyCopilot Dynamic Multi-Key API Pool & Self-Healing Groq Client.
-Prevents agent from getting stuck by automatically rotating keys on 429 rate limits,
-managing key health status, and trying resilient backup models.
+ApplyCopilot Universal Multi-Provider API Pool & Self-Healing Client.
+Seamlessly cascades between:
+  1. Groq Cloud (Multi-Key Pool with automatic 429 rotation)
+  2. Google Gemini 2.5 Flash (Google AI Studio REST API: 1M TPM / 1500 RPD Free)
+  3. OpenRouter Free Tier (Llama 3.3 70B Free, Gemini 2.0 Flash Free)
+  4. Cerebras Cloud (1M free tokens/day at 2000 tok/sec)
+  5. Local Zero-Token Autonomous Engine (Zero external dependencies)
+
+Guarantees the agent never hangs, crashes, or halts due to API rate limits or downtime.
 """
 
 import os
+import sys
 import re
 import time
 import json
+import urllib.request
+import urllib.error
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
-from groq import Groq, RateLimitError, APIError, APIConnectionError
+
+if sys.platform.startswith('win'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
 load_dotenv()
 
-class APIKeyStatus:
+# ==============================================================================
+# 1. GROQ KEY STATUS & CLIENT WRAPPER
+# ==============================================================================
+try:
+    from groq import Groq, RateLimitError, APIError, APIConnectionError
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
+
+
+class GroqKeyStatus:
     def __init__(self, key: str, index: int):
         self.key = key.strip()
         self.index = index
         self.masked = self._mask_key(self.key)
-        self.status = "HEALTHY" # "HEALTHY", "COOLING_DOWN", "EXHAUSTED"
+        self.status = "HEALTHY"  # "HEALTHY", "COOLING_DOWN", "EXHAUSTED"
         self.cooldown_until = 0.0
         self.success_count = 0
         self.failure_count = 0
@@ -34,7 +59,9 @@ class APIKeyStatus:
         return f"{key[:6]}...{key[-4:]}"
 
     @property
-    def client(self) -> Groq:
+    def client(self):
+        if not GROQ_AVAILABLE:
+            return None
         if self._client is None:
             self._client = Groq(api_key=self.key, timeout=12.0)
         return self._client
@@ -50,13 +77,13 @@ class APIKeyStatus:
         self.failure_count += 1
         self.cooldown_until = time.time() + cooldown_seconds
         self.last_error = err_msg or "RateLimitError 429"
-        print(f"[API POOL] ⚠️ Key #{self.index} ({self.masked}) rate-limited. Quarantined for {int(cooldown_seconds)}s.")
+        print(f"[API POOL] [!WARN] Groq Key #{self.index} ({self.masked}) rate-limited. Quarantined for {int(cooldown_seconds)}s.")
 
     def mark_invalid(self, err_msg: str = ""):
         self.status = "EXHAUSTED"
         self.failure_count += 1
         self.last_error = err_msg or "Invalid Key / 401"
-        print(f"[API POOL] ❌ Key #{self.index} ({self.masked}) marked EXHAUSTED: {self.last_error}")
+        print(f"[API POOL] [ERROR] Groq Key #{self.index} ({self.masked}) marked EXHAUSTED: {self.last_error}")
 
     def is_available(self) -> bool:
         if self.status == "HEALTHY":
@@ -64,22 +91,239 @@ class APIKeyStatus:
         if self.status == "COOLING_DOWN":
             if time.time() >= self.cooldown_until:
                 self.status = "HEALTHY"
-                print(f"[API POOL] 🔄 Key #{self.index} ({self.masked}) cooldown expired. Restored to HEALTHY.")
+                print(f"[API POOL] [FAILOVER] Groq Key #{self.index} ({self.masked}) cooldown expired. Restored to HEALTHY.")
                 return True
         return False
 
 
-class MultiKeyAPIPool:
+# ==============================================================================
+# 2. GOOGLE GEMINI 2.5 FLASH PROVIDER (Google AI Studio REST)
+# ==============================================================================
+class GeminiProvider:
     def __init__(self):
-        self.keys: List[APIKeyStatus] = []
+        self.keys: List[str] = []
         self.current_idx = 0
+        self.cooldown_until = 0.0
+        self.success_count = 0
+        self.models = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-flash-lite"]
         self._load_keys()
 
     def _load_keys(self):
-        """Loads and deduplicates all Groq keys from environment variables."""
-        discovered_keys = []
+        discovered = []
+        for var in ["GEMINI_API_KEY", "GOOGLE_API_KEY", "GEMINI_KEY"]:
+            val = os.getenv(var, "").strip().strip("'\"")
+            if val and val not in discovered:
+                discovered.append(val)
+        for i in range(1, 10):
+            val = os.getenv(f"GEMINI_API_KEY_{i}", "").strip().strip("'\"")
+            if val and val not in discovered:
+                discovered.append(val)
+        self.keys = discovered
+        if self.keys:
+            print(f"[API POOL] Initialized Google Gemini Provider with {len(self.keys)} key(s).")
 
-        # 1. Check comma/semicolon/newline separated GROQ_API_KEYS
+    def execute(self, messages: List[Dict[str, str]], max_tokens: int = 300) -> Optional[Dict[str, Any]]:
+        if not self.keys:
+            return None
+        if time.time() < self.cooldown_until:
+            return None
+
+        # Build prompt from messages
+        prompt_parts = []
+        for m in messages:
+            role = m.get("role", "user").upper()
+            content = m.get("content", "")
+            prompt_parts.append(f"[{role}]:\n{content}")
+        full_prompt = "\n\n".join(prompt_parts)
+        full_prompt += "\n\nCRITICAL: Respond with a single valid JSON object only. Do NOT include markdown blocks."
+
+        key = self.keys[self.current_idx % len(self.keys)]
+        for model in self.models:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"
+            payload = {
+                "contents": [{"parts": [{"text": full_prompt}]}],
+                "generationConfig": {
+                    "responseMimeType": "application/json",
+                    "maxOutputTokens": max_tokens,
+                    "temperature": 0.1
+                }
+            }
+            try:
+                req = urllib.request.Request(
+                    url,
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={"Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    parsed = self._clean_and_parse_json(text)
+                    if parsed and isinstance(parsed, dict) and parsed.get("action"):
+                        self.success_count += 1
+                        print(f"[API POOL] [OK] Gemini Provider ({model}) returned action: '{parsed.get('action')}'")
+                        return parsed
+            except urllib.error.HTTPError as e:
+                err_body = ""
+                try:
+                    err_body = e.read().decode("utf-8")
+                except Exception:
+                    pass
+                print(f"[API POOL] [!WARN] Gemini HTTP {e.code} on {model}: {err_body[:100]}")
+                if e.code == 429:
+                    self.cooldown_until = time.time() + 45.0
+                    break
+                elif e.code == 404:
+                    continue
+            except Exception as e:
+                print(f"[API POOL] [!WARN] Gemini request error on {model}: {e}")
+                continue
+
+        return None
+
+    def _clean_and_parse_json(self, raw: str) -> Optional[Dict[str, Any]]:
+        text = raw.strip()
+        if "```json" in text:
+            text = text.split("```json")[1].split("```")[0].strip()
+        elif "```" in text:
+            text = text.split("```")[1].split("```")[0].strip()
+        try:
+            return json.loads(text)
+        except Exception:
+            match = re.search(r'"action"\s*:\s*"([^"]+)"', text)
+            if match:
+                return {"action": match.group(1), "message": text, "reason": "Parsed from response."}
+            return None
+
+
+# ==============================================================================
+# 3. OPENROUTER FREE TIER PROVIDER
+# ==============================================================================
+class OpenRouterProvider:
+    def __init__(self):
+        self.api_key = os.getenv("OPENROUTER_API_KEY", "").strip().strip("'\"")
+        self.cooldown_until = 0.0
+        self.models = [
+            "meta-llama/llama-3.3-70b-instruct:free",
+            "google/gemini-2.0-flash-exp:free",
+            "qwen/qwen-2.5-72b-instruct:free"
+        ]
+        if self.api_key:
+            print("[API POOL] Initialized OpenRouter Free Tier Provider.")
+
+    def execute(self, messages: List[Dict[str, str]], max_tokens: int = 300) -> Optional[Dict[str, Any]]:
+        if not self.api_key or time.time() < self.cooldown_until:
+            return None
+
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        for model in self.models:
+            payload = {
+                "model": model,
+                "messages": messages,
+                "temperature": 0.1,
+                "max_tokens": max_tokens,
+                "response_format": {"type": "json_object"}
+            }
+            try:
+                req = urllib.request.Request(
+                    url,
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {self.api_key}",
+                        "HTTP-Referer": "http://localhost:8000",
+                        "X-Title": "Wormhole Copilot"
+                    }
+                )
+                with urllib.request.urlopen(req, timeout=12) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    text = data["choices"][0]["message"]["content"].strip()
+                    parsed = self._clean_and_parse_json(text)
+                    if parsed:
+                        print(f"[API POOL] [OK] OpenRouter ({model}) returned action: '{parsed.get('action')}'")
+                        return parsed
+            except urllib.error.HTTPError as e:
+                if e.code == 429:
+                    self.cooldown_until = time.time() + 60.0
+                    break
+            except Exception as e:
+                print(f"[API POOL] [!WARN] OpenRouter error on {model}: {e}")
+                continue
+
+        return None
+
+    def _clean_and_parse_json(self, raw: str) -> Optional[Dict[str, Any]]:
+        text = raw.strip()
+        if "```json" in text:
+            text = text.split("```json")[1].split("```")[0].strip()
+        elif "```" in text:
+            text = text.split("```")[1].split("```")[0].strip()
+        try:
+            return json.loads(text)
+        except Exception:
+            return None
+
+
+# ==============================================================================
+# 4. CEREBRAS CLOUD PROVIDER (1M Tokens/Day Free)
+# ==============================================================================
+class CerebrasProvider:
+    def __init__(self):
+        self.api_key = os.getenv("CEREBRAS_API_KEY", "").strip().strip("'\"")
+        self.cooldown_until = 0.0
+        self.models = ["llama-3.3-70b", "llama3.1-8b"]
+        if self.api_key:
+            print("[API POOL] Initialized Cerebras Cloud Provider.")
+
+    def execute(self, messages: List[Dict[str, str]], max_tokens: int = 300) -> Optional[Dict[str, Any]]:
+        if not self.api_key or time.time() < self.cooldown_until:
+            return None
+
+        url = "https://api.cerebras.ai/v1/chat/completions"
+        for model in self.models:
+            payload = {
+                "model": model,
+                "messages": messages,
+                "temperature": 0.1,
+                "max_tokens": max_tokens,
+                "response_format": {"type": "json_object"}
+            }
+            try:
+                req = urllib.request.Request(
+                    url,
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {self.api_key}"
+                    }
+                )
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    text = data["choices"][0]["message"]["content"].strip()
+                    parsed = json.loads(text)
+                    if parsed:
+                        print(f"[API POOL] [OK] Cerebras ({model}) returned action: '{parsed.get('action')}'")
+                        return parsed
+            except Exception as e:
+                print(f"[API POOL] [!WARN] Cerebras error on {model}: {e}")
+                continue
+
+        return None
+
+
+# ==============================================================================
+# 5. MASTER UNIVERSAL MULTI-PROVIDER POOL
+# ==============================================================================
+class MultiKeyAPIPool:
+    def __init__(self):
+        self.keys: List[GroqKeyStatus] = []
+        self.current_idx = 0
+        self._load_groq_keys()
+        self.gemini = GeminiProvider()
+        self.openrouter = OpenRouterProvider()
+        self.cerebras = CerebrasProvider()
+
+    def _load_groq_keys(self):
+        discovered_keys = []
         env_keys_list = os.getenv("GROQ_API_KEYS", "")
         if env_keys_list:
             for k in re.split(r"[,;\n]+", env_keys_list):
@@ -87,7 +331,6 @@ class MultiKeyAPIPool:
                 if k_clean and k_clean not in discovered_keys:
                     discovered_keys.append(k_clean)
 
-        # 2. Check individual numbered variables: GROQ_API_KEY_1, GROQ_API_KEY_2...
         for i in range(1, 20):
             k = os.getenv(f"GROQ_API_KEY_{i}") or os.getenv(f"GROQ_KEY_{i}")
             if k:
@@ -95,51 +338,50 @@ class MultiKeyAPIPool:
                 if k_clean and k_clean not in discovered_keys:
                     discovered_keys.append(k_clean)
 
-        # 3. Check legacy single GROQ_API_KEY
         single_key = os.getenv("GROQ_API_KEY", "")
         if single_key:
             k_clean = single_key.strip().strip("'\"")
             if k_clean and k_clean not in discovered_keys:
                 discovered_keys.append(k_clean)
 
-        self.keys = [APIKeyStatus(k, idx + 1) for idx, k in enumerate(discovered_keys)]
-        print(f"[API POOL] Initialized pool with {len(self.keys)} Groq API key(s).")
-        for k_obj in self.keys:
-            print(f"  * Key #{k_obj.index}: {k_obj.masked} [Status: {k_obj.status}]")
+        self.keys = [GroqKeyStatus(k, idx + 1) for idx, k in enumerate(discovered_keys)]
+        print(f"[API POOL] Initialized pool with {len(self.keys)} Groq key(s).")
 
     def add_key(self, raw_key: str) -> bool:
-        """Dynamically add an API key at runtime without restart."""
         cleaned = raw_key.strip().strip("'\"")
-        if not cleaned or any(k.key == cleaned for k in self.keys):
+        if not cleaned:
             return False
-        new_obj = APIKeyStatus(cleaned, len(self.keys) + 1)
-        self.keys.append(new_obj)
-        print(f"[API POOL] Dynamically added new key #{new_obj.index}: {new_obj.masked}")
-        return True
+        if cleaned.startswith("gsk_"):
+            if not any(k.key == cleaned for k in self.keys):
+                new_obj = GroqKeyStatus(cleaned, len(self.keys) + 1)
+                self.keys.append(new_obj)
+                print(f"[API POOL] Added Groq key #{new_obj.index}")
+                return True
+        elif cleaned.startswith("sk-or-v1-"):
+            self.openrouter.api_key = cleaned
+            print("[API POOL] Set OpenRouter key.")
+            return True
+        elif cleaned.startswith("csk-"):
+            self.cerebras.api_key = cleaned
+            print("[API POOL] Set Cerebras key.")
+            return True
+        else:
+            if cleaned not in self.gemini.keys:
+                self.gemini.keys.append(cleaned)
+                print("[API POOL] Added Google Gemini key.")
+                return True
+        return False
 
-    def get_healthy_key(self) -> Optional[APIKeyStatus]:
-        """Returns the next healthy key in round-robin sequence."""
+    def get_healthy_groq_key(self) -> Optional[GroqKeyStatus]:
         if not self.keys:
             return None
-
         total = len(self.keys)
-        # Search from current_idx in circular fashion
         for step in range(total):
             idx = (self.current_idx + step) % total
             candidate = self.keys[idx]
             if candidate.is_available():
                 self.current_idx = (idx + 1) % total
                 return candidate
-
-        # If all keys cooling down, pick the one with earliest cooldown expiry
-        cooling_keys = [k for k in self.keys if k.status == "COOLING_DOWN"]
-        if cooling_keys:
-            cooling_keys.sort(key=lambda k: k.cooldown_until)
-            chosen = cooling_keys[0]
-            wait_time = max(0.0, chosen.cooldown_until - time.time())
-            print(f"[API POOL] All keys cooling down. Earliest ready is #{chosen.index} in {wait_time:.1f}s.")
-            return chosen
-
         return None
 
     def execute_chat_completion(
@@ -151,35 +393,30 @@ class MultiKeyAPIPool:
         response_format: Optional[Dict[str, str]] = None
     ) -> Optional[Dict[str, Any]]:
         """
-        Executes Groq chat completion with multi-key failover and multi-model fallback.
-        Ensures the agent never hangs or gets stuck on rate limits.
+        Universal fallback cascade:
+          1. Groq Multi-Key Pool (Ultra-fast LPU)
+          2. Google Gemini 2.5 Flash (1M TPM / 1500 RPD Free)
+          3. OpenRouter Free Tier (Llama 3.3 70B Free)
+          4. Cerebras Cloud (1M Tokens/Day Free)
+          5. Local Zero-Token Autonomous Engine (return None)
         """
-        if not self.keys:
-            raise RuntimeError("No Groq API keys configured in environment!")
-
         if models is None:
-            models = [
-                "qwen/qwen3.8-27b",
-                "openai/gpt-oss-20b",
-                "openai/gpt-oss-120b"
-            ]
+            models = ["qwen/qwen3.8-27b", "openai/gpt-oss-20b", "openai/gpt-oss-120b"]
 
-        last_error = None
-        attempt_count = 0
+        # Ensure the prompt contains the word 'json' for strict API requirements
+        has_json_word = any("json" in m.get("content", "").lower() for m in messages)
+        if not has_json_word:
+            messages = [{"role": "system", "content": "Return valid json."}] + messages
 
-        # Loop through available keys in pool
+        # --- LEVEL 1: GROQ MULTI-KEY POOL ---
         for key_idx in range(len(self.keys)):
-            key_status = self.get_healthy_key()
-            if not key_status:
+            key_status = self.get_healthy_groq_key()
+            if not key_status or not key_status.client:
                 break
 
             client = key_status.client
-
-            # For each key, try available models in order of speed and quota
             for model_name in models:
-                attempt_count += 1
                 try:
-                    t0 = time.time()
                     kwargs = {
                         "model": model_name,
                         "messages": messages,
@@ -190,94 +427,79 @@ class MultiKeyAPIPool:
                         kwargs["response_format"] = response_format
 
                     res = client.chat.completions.create(**kwargs)
-                    elapsed = round((time.time() - t0) * 1000, 1)
-
                     content = (res.choices[0].message.content or "{}").strip()
-                    clean_content = content
-                    if "```json" in clean_content:
-                        clean_content = clean_content.split("```json")[1].split("```")[0].strip()
-                    elif "```" in clean_content:
-                        clean_content = clean_content.split("```")[1].split("```")[0].strip()
-                    try:
-                        parsed = json.loads(clean_content)
-                    except Exception:
-                        match = re.search(r'"action"\s*:\s*"([^"]+)"', clean_content)
-                        act = match.group(1) if match else "respond"
-                        parsed = {"action": act, "message": clean_content, "reason": "Model response."}
-                    if isinstance(parsed, list):
-                        parsed = parsed[0] if len(parsed) > 0 else {"action": "finish", "reason": "Empty action"}
-
-                    key_status.mark_success()
-                    return parsed
-
+                    parsed = self._parse_json_result(content)
+                    if parsed:
+                        key_status.mark_success()
+                        return parsed
                 except RateLimitError as e:
-                    last_error = e
                     err_text = str(e)
-                    print(f"[API POOL] ⚠️ Rate limit on Key #{key_status.index} for model '{model_name}': {err_text[:120]}")
-                    
-                    # If organization-wide tokens per day (TPD) is hit, fail over immediately to zero-token engine
+                    print(f"[API POOL] [!WARN] Groq Rate limit on Key #{key_status.index}: {err_text[:100]}")
                     if "tokens per day" in err_text.lower() or "tpd" in err_text.lower():
-                        print("[API POOL] Organization daily token limit reached. Failing over immediately to zero-token autonomous engine...")
-                        return None
-
-                    # If error is specific to this model, try next model on same key first
-                    if "model `" in err_text or "for model" in err_text:
-                        print(f"[API POOL] Model-specific limit detected. Trying next backup model on Key #{key_status.index}...")
-                        continue
-                    else:
-                        # Key-wide rate limit: quarantine key and switch to next key
-                        key_status.mark_rate_limit(cooldown_seconds=45.0, err_msg=err_text[:100])
                         break
-
-                except APIConnectionError as e:
-                    last_error = e
-                    print(f"[API POOL] Connection error with Key #{key_status.index} on model {model_name}: {e}")
-                    key_status.mark_rate_limit(cooldown_seconds=15.0, err_msg=str(e)[:100])
+                    key_status.mark_rate_limit(cooldown_seconds=45.0, err_msg=err_text[:80])
                     break
-
                 except APIError as e:
-                    last_error = e
                     err_text = str(e)
                     if "401" in err_text or "invalid" in err_text.lower():
-                        key_status.mark_invalid(err_text[:100])
+                        key_status.mark_invalid(err_text[:80])
                         break
-                    elif "429" in err_text or "rate" in err_text.lower():
-                        if "model `" in err_text or "for model" in err_text:
-                            continue
-                        key_status.mark_rate_limit(cooldown_seconds=45.0, err_msg=err_text[:100])
-                        break
-                    else:
-                        print(f"[API POOL] Model {model_name} error with Key #{key_status.index}: {e}. Trying next model...")
-                        continue
-
+                    key_status.mark_rate_limit(cooldown_seconds=30.0, err_msg=err_text[:80])
+                    break
                 except Exception as e:
-                    last_error = e
-                    print(f"[API POOL] Unexpected error on model {model_name} with Key #{key_status.index}: {e}")
+                    print(f"[API POOL] [!WARN] Groq unexpected error: {e}")
                     continue
 
-        print(f"[API POOL] ⚠️ Multi-key/model pool engaged fallback after {attempt_count} attempts. Last error: {last_error}")
-        
-        # Multi-key pool exhausted: return None to allow agent_core to engage autonomous local heuristics
+        # --- LEVEL 2: GOOGLE GEMINI 2.5 FLASH ---
+        print("[API POOL] [FAILOVER] Groq pool cooling down. Cascading to Google Gemini 2.5 Flash...")
+        gemini_action = self.gemini.execute(messages, max_tokens=max_tokens)
+        if gemini_action:
+            return gemini_action
+
+        # --- LEVEL 3: OPENROUTER FREE TIER ---
+        if self.openrouter.api_key:
+            print("[API POOL] [FAILOVER] Cascading to OpenRouter Free Tier...")
+            router_action = self.openrouter.execute(messages, max_tokens=max_tokens)
+            if router_action:
+                return router_action
+
+        # --- LEVEL 4: CEREBRAS CLOUD ---
+        if self.cerebras.api_key:
+            print("[API POOL] [FAILOVER] Cascading to Cerebras Cloud...")
+            cerebras_action = self.cerebras.execute(messages, max_tokens=max_tokens)
+            if cerebras_action:
+                return cerebras_action
+
+        # --- LEVEL 5: RETURN NONE FOR LOCAL AUTONOMOUS FALLBACK ---
+        print("[API POOL] [!WARN] All external API tiers engaged. Yielding to Zero-Token Local Autonomous Engine.")
         return None
 
+    def _parse_json_result(self, content: str) -> Optional[Dict[str, Any]]:
+        clean_content = content
+        if "```json" in clean_content:
+            clean_content = clean_content.split("```json")[1].split("```")[0].strip()
+        elif "```" in clean_content:
+            clean_content = clean_content.split("```")[1].split("```")[0].strip()
+        try:
+            parsed = json.loads(clean_content)
+        except Exception:
+            match = re.search(r'"action"\s*:\s*"([^"]+)"', clean_content)
+            act = match.group(1) if match else "respond"
+            parsed = {"action": act, "message": clean_content, "reason": "Model response."}
+        if isinstance(parsed, list):
+            parsed = parsed[0] if len(parsed) > 0 else None
+        return parsed
+
     def get_telemetry(self) -> Dict[str, Any]:
-        """Returns structured telemetry for dashboard / judges."""
         return {
-            "total_keys": len(self.keys),
-            "healthy_keys": sum(1 for k in self.keys if k.is_available()),
-            "cooling_keys": sum(1 for k in self.keys if k.status == "COOLING_DOWN"),
-            "keys_summary": [
-                {
-                    "index": k.index,
-                    "masked": k.masked,
-                    "status": k.status,
-                    "success_count": k.success_count,
-                    "failure_count": k.failure_count,
-                    "cooldown_remaining_sec": max(0, int(k.cooldown_until - time.time())) if k.status == "COOLING_DOWN" else 0
-                }
-                for k in self.keys
-            ]
+            "groq_keys_total": len(self.keys),
+            "groq_keys_healthy": sum(1 for k in self.keys if k.is_available()),
+            "gemini_keys": len(self.gemini.keys),
+            "gemini_active": len(self.gemini.keys) > 0 and time.time() >= self.gemini.cooldown_until,
+            "openrouter_active": bool(self.openrouter.api_key),
+            "cerebras_active": bool(self.cerebras.api_key)
         }
 
-# Global singleton API pool
+
+# Global singleton instance
 api_pool = MultiKeyAPIPool()

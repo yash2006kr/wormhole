@@ -7,6 +7,7 @@ import os
 import sys
 import json
 import time
+from pathlib import Path
 
 if sys.platform.startswith('win'):
     sys.stdout.reconfigure(encoding='utf-8')
@@ -39,6 +40,13 @@ def run_transit_rush(target_url="http://localhost:8000/mock/ksrtc", headless=Tru
         "clean_fare": 0,
         "state": "IDLE"
     }
+
+    if not (str(target_url).startswith("http://") or str(target_url).startswith("https://") or str(target_url).startswith("file://")):
+        local_path = (Path(__file__).parent / target_url).resolve()
+        if local_path.exists():
+            target_url = local_path.as_uri()
+        else:
+            target_url = "http://localhost:8000/mock/ksrtc"
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=headless)
