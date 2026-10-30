@@ -1116,14 +1116,20 @@ class AgentCore:
                     await asyncio.sleep(1.5)
             except Exception as e:
                 print(f"[!] Emergency navigation error: {e}")
-        elif self.page and (not self.page.url or self.page.url in ["about:blank", "chrome://newtab/"] or "wikipedia" in self.page.url):
-            # Default to Google Search Bar when prompt doesn't specify a website
-            try:
-                print("[AGENT CORE] No website specified in prompt. Defaulting live browser to Google Search Bar...")
-                await self.page.goto("https://www.google.com", wait_until="domcontentloaded", timeout=15000)
-                await asyncio.sleep(1.0)
-            except Exception as e:
-                print(f"[!] Default Google navigation error: {e}")
+        else:
+            # When no explicit website/service is matched, check if we need to open Google
+            is_on_google = self.page and ("google.com" in (self.page.url or ""))
+            if not is_on_google and self.page:
+                try:
+                    print(f"[AGENT CORE] General query '{goal}'. Defaulting live browser to Google Search Bar...")
+                    await self.broadcast({
+                        "type": "LOG",
+                        "message": "Opening Google Search Bar for web query exploration..."
+                    })
+                    await self.page.goto("https://www.google.com", wait_until="domcontentloaded", timeout=15000)
+                    await asyncio.sleep(1.0)
+                except Exception as e:
+                    print(f"[!] Default Google navigation error: {e}")
         
         if self.execution_task and not self.execution_task.done():
             self.execution_task.cancel()
@@ -1680,34 +1686,29 @@ class AgentCore:
         # A. Google Search Results: Extract organic snippet listings and answer user directly
         if ("google.com" in curr_url or "bing.com" in curr_url) and ("/search" in curr_url or "search?" in curr_url):
             try:
-                extracted_snippets = await self.page.evaluate("""
-                    () => {
-                        const items = [];
-                        document.querySelectorAll('.g, [data-sokoban-container], .MjjYud').forEach(el => {
-                            if (items.length < 5) {
-                                const h3 = el.querySelector('h3');
-                                const snip = el.querySelector('.VwiC3b, [style*="-webkit-line-clamp"]');
-                                if (h3 && h3.innerText.trim()) {
-                                    items.push(`• **${h3.innerText.trim()}**: ${snip ? snip.innerText.trim() : ''}`);
-                                }
-                            }
-                        });
-                        return items.join('\n\n');
-                    }
-                """)
+                body_text = await self.page.evaluate("() => document.body.innerText")
+                lines = []
+                for line in body_text.splitlines():
+                    ls = line.strip()
+                    if len(ls) > 20 and not any(skip in ls.lower() for skip in ["sign in", "settings", "privacy", "terms", "feedback", "google apps", "tools", "cached", "similar", "search tools", "advanced search"]):
+                        if ls not in lines:
+                            lines.append(ls)
+                    if len(lines) >= 8:
+                        break
+                extracted_snippets = "\n\n".join([f"• **{l}**" if i % 2 == 0 else f"  {l}" for i, l in enumerate(lines[:6])])
             except Exception:
                 extracted_snippets = ""
 
-            if extracted_snippets:
-                return {
-                    "action": "respond",
-                    "message": f"Here are the top recommendations found for **\"{clean_goal}\"** on Google:\n\n{extracted_snippets}\n\n*You can explore and click any of the live restaurant listings directly in the right viewport.*",
-                    "reason": "Extracted search results and presented recommendations to user in chat.",
-                    "finish": True
-                }
+            summary_msg = extracted_snippets if extracted_snippets else f"Explored Google Search results for **\"{clean_goal}\"**."
+            return {
+                "action": "respond",
+                "message": f"Here are the top findings for **\"{clean_goal}\"** on Google:\n\n{summary_msg}\n\n*You can explore and click any of the live listings directly in the right viewport.*",
+                "reason": "Extracted search results from page.",
+                "finish": True
+            }
 
-        # B. If on Google home page -> type query into search input
-        if "google.com" in curr_url or "bing.com" in curr_url:
+        # B. If on Google home page (NOT on search results) -> type query into search input
+        elif ("google.com" in curr_url or "bing.com" in curr_url):
             return {
                 "action": "type",
                 "selector": "textarea[name='q'], input[name='q']",

@@ -103,6 +103,12 @@ class FraudSentinel:
                     if tag == "iframe":
                         src = await inp.get_attribute("src") or ""
                         name = await inp.get_attribute("name") or ""
+                        # Ignore background preconnect / telemetry iframes
+                        if "controller" in src.lower() or "preconnect" in src.lower() or "m-outer" in src.lower():
+                            continue
+                        is_vis = await inp.is_visible()
+                        if not is_vis:
+                            continue
                         if any(k in src.lower() or k in name.lower() for k in ["stripe", "turnstile", "recaptcha", "razorpay"]):
                             self.state = "PAUSED_FOR_HUMAN"
                             self.last_detection = {
