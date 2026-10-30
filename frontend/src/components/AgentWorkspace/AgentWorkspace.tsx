@@ -9,18 +9,11 @@ interface Tab {
   active: boolean;
 }
 
-interface MessageStep {
-  text: string;
-  action?: string;
-  time?: string;
-}
-
 interface ChatMessage {
   id: string;
   sender: "user" | "agent" | "system";
   text: string;
   timestamp: string;
-  steps?: MessageStep[];
   emergency?: boolean;
   telemetry?: any;
   proofImage?: string;
@@ -51,20 +44,21 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
   ]);
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [interactiveMode, setInteractiveMode] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+
+  // Temporary telemetry state: shown during execution with shimmer, disappears once agent replies
+  const [activeTelemetry, setActiveTelemetry] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
-  const recognitionRef = useRef<any>(null);
 
   // Auto-scroll chat feed
   useEffect(() => {
     if (chatScrollRef.current) {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
     }
-  }, [messages, agentStatus]);
+  }, [messages, activeTelemetry, agentStatus]);
 
   // Connect WebSocket to real-time agent screencast & telemetry
   useEffect(() => {
@@ -96,7 +90,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
         socket.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+            const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
             // 1. Live Frame
             if (data.type === "FRAME" && data.data) {
@@ -138,11 +132,16 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
             else if (data.type === "STATE_CHANGE") {
               if (data.state === "RUNNING") setAgentStatus("RUNNING");
               else if (data.state === "PAUSED_FOR_HUMAN") setAgentStatus("PAUSED_FOR_HUMAN");
-              else if (data.state === "IDLE") setAgentStatus("IDLE");
+              else if (data.state === "IDLE") {
+                setAgentStatus("IDLE");
+                setActiveTelemetry(null); // Telemetry disappears after agent finishes
+              }
             }
 
-            // 4. Chat Response from Model
+            // 4. Chat Response from Model (Official Reply)
             else if (data.type === "CHAT_RESPONSE" && data.text) {
+              setActiveTelemetry(null); // Telemetry disappears once agent replies!
+              setAgentStatus("SUCCESS");
               setMessages((prev) => {
                 const last = prev[prev.length - 1];
                 if (last && last.sender === "agent") {
@@ -161,110 +160,37 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                     sender: "agent",
                     text: data.text,
                     timestamp: now,
-                    steps: [],
                   },
                 ];
               });
             }
 
-            // 5. Agent Action Telemetry
+            // 5. Agent Action Telemetry (Temporary concise status banner)
             else if (data.type === "ACTION") {
-              const actionSummary = `[${data.action}] ${data.reason || data.selector || data.url || ""}`;
-              setMessages((prev) => {
-                const last = prev[prev.length - 1];
-                const stepObj: MessageStep = { text: actionSummary, action: data.action, time: now };
-                if (last && last.sender === "agent") {
-                  return [
-                    ...prev.slice(0, -1),
-                    {
-                      ...last,
-                      steps: [...(last.steps || []), stepObj],
-                    },
-                  ];
-                }
-                return [
-                  ...prev,
-                  {
-                    id: Math.random().toString(),
-                    sender: "agent",
-                    text: `Executing autonomous action: ${data.action}...`,
-                    timestamp: now,
-                    steps: [stepObj],
-                  },
-                ];
-              });
+              const actionSummary = data.reason || `Executing action: ${data.action}`;
+              setActiveTelemetry(`1 task running · ${actionSummary}`);
             }
 
-            // 6. Navigation Step
+            // 6. Navigation Step Telemetry (Temporary concise status banner)
             else if (data.type === "STEP") {
-              const stepSummary = `📍 Step ${data.step}: Navigated to ${data.url} (${data.title || "Page Loaded"})`;
-              setMessages((prev) => {
-                const last = prev[prev.length - 1];
-                const stepObj: MessageStep = { text: stepSummary, time: now };
-                if (last && last.sender === "agent") {
-                  return [
-                    ...prev.slice(0, -1),
-                    {
-                      ...last,
-                      steps: [...(last.steps || []), stepObj],
-                    },
-                  ];
-                }
-                return [
-                  ...prev,
-                  {
-                    id: Math.random().toString(),
-                    sender: "agent",
-                    text: "Exploring web trajectory...",
-                    timestamp: now,
-                    steps: [stepObj],
-                  },
-                ];
-              });
+              const domain = data.url ? new URL(data.url).hostname : "web";
+              setActiveTelemetry(`1 task running · Step ${data.step}: Inspecting ${domain}`);
             }
 
             // 7. Telemetry Log
-            else if (data.type === "LOG") {
-              const logText = data.message || "";
-              setMessages((prev) => {
-                const last = prev[prev.length - 1];
-                const stepObj: MessageStep = { text: logText, time: now };
-                if (last && last.sender === "agent") {
-                  return [
-                    ...prev.slice(0, -1),
-                    {
-                      ...last,
-                      steps: [...(last.steps || []), stepObj],
-                    },
-                  ];
-                }
-                return prev;
-              });
+            else if (data.type === "LOG" && data.message) {
+              setActiveTelemetry(`1 task running · ${data.message}`);
             }
 
             // 8. Task Complete
             else if (data.type === "COMPLETE") {
               setAgentStatus("SUCCESS");
-              if (data.reason) {
-                setMessages((prev) => {
-                  const last = prev[prev.length - 1];
-                  const stepObj: MessageStep = { text: `✅ ${data.reason}`, time: now };
-                  if (last && last.sender === "agent") {
-                    return [
-                      ...prev.slice(0, -1),
-                      {
-                        ...last,
-                        steps: [...(last.steps || []), stepObj],
-                      },
-                    ];
-                  }
-                  return prev;
-                });
-              }
+              setActiveTelemetry(null); // Disappears after completion
             }
 
             // 9. SOS Emergency Alert
             else if (data.type === "SOS_EMERGENCY_ACTIVATED") {
+              setActiveTelemetry(null);
               setMessages((prev) => [
                 ...prev,
                 {
@@ -331,16 +257,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
 
     setMessages((prev) => [...prev, userMsg]);
     setAgentStatus("RUNNING");
-
-    // Create placeholder agent message for live streaming
-    const placeholderAgentMsg: ChatMessage = {
-      id: Math.random().toString(),
-      sender: "agent",
-      text: "Analyzing intent and executing autonomous trajectory...",
-      timestamp: timeStr,
-      steps: [{ text: `Initiated goal: "${textToSend}"`, time: timeStr }],
-    };
-    setMessages((prev) => [...prev, placeholderAgentMsg]);
+    setActiveTelemetry("1 task running"); // Temporary telemetry banner begins
 
     try {
       const res = await fetch("/api/execute", {
@@ -351,45 +268,35 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
 
       const data = await res.json();
 
-      // Format rich response if protocol finished immediately
-      let responseText = data.response || data.reason || data.message || "";
-      if (data.details) {
-        responseText += `\n\n**Protocol Telemetry Details:**\n\`\`\`json\n${JSON.stringify(
-          data.details,
-          null,
-          2
-        )}\n\`\`\``;
-      }
-
-      const isEmergency =
-        data.status === "EMERGENCY_DISPATCH_COMPLETE" ||
-        data.protocol === "SOS_MEDICAL_EMERGENCY" ||
-        textToSend.toLowerCase().includes("heart attack") ||
-        textToSend.toLowerCase().includes("emergency");
-
-      setMessages((prev) => {
-        const last = prev[prev.length - 1];
-        if (last && last.sender === "agent") {
-          return [
-            ...prev.slice(0, -1),
-            {
-              ...last,
-              text: responseText || last.text,
-              emergency: isEmergency,
-              telemetry: data.details || data.telemetry,
-              proofImage: data.proof_image,
-            },
-          ];
-        }
-        return prev;
-      });
-
+      // If protocol finished immediately (e.g. Doc Exorcist, Transit Rush, Dark Pattern, Fraud Sentinel)
       if (data.status === "COMPLETED") {
+        setActiveTelemetry(null); // Telemetry disappears once complete!
         setAgentStatus("SUCCESS");
+
+        const isEmergency =
+          data.protocol === "SOS_MEDICAL_EMERGENCY" ||
+          textToSend.toLowerCase().includes("heart attack") ||
+          textToSend.toLowerCase().includes("emergency");
+
+        const agentMsg: ChatMessage = {
+          id: Math.random().toString(),
+          sender: "agent",
+          text: data.response || data.reason || "Task executed successfully.",
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          emergency: isEmergency,
+          telemetry: data.details || data.telemetry,
+          proofImage: data.proof_image,
+        };
+
+        setMessages((prev) => [...prev, agentMsg]);
+      } else if (data.status === "RUNNING") {
+        setActiveTelemetry(`1 task running · ${data.reason || "Navigating browser..."}`);
       }
+
       refreshTabs();
     } catch (err: any) {
       console.error("Execution error:", err);
+      setActiveTelemetry(null);
       const errorMsg: ChatMessage = {
         id: Math.random().toString(),
         sender: "system",
@@ -451,6 +358,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
       console.warn("Reset chat error:", e);
     }
     setMessages([]);
+    setActiveTelemetry(null);
     setAgentStatus("IDLE");
     if (onReset) {
       onReset();
@@ -465,6 +373,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
         wsRef.current.send(JSON.stringify({ type: "ABORT_TASK" }));
       }
       setAgentStatus("PAUSED_FOR_HUMAN");
+      setActiveTelemetry(null);
     } catch (e) {
       console.error("Stop agent error:", e);
     }
@@ -527,93 +436,74 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
     }
   };
 
-  // Canvas Mouse Click Forwarding
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  // ==============================================================================
+  // PRECISE LETTERBOX-AWARE CANVAS COORDINATE NORMALIZATION
+  // Eliminates top/bottom offset caused by object-fit: contain letterboxing!
+  // ==============================================================================
+  const getCanvasNormalizedCoordinates = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
-    if (!canvas || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+    if (!canvas) return null;
 
     const rect = canvas.getBoundingClientRect();
-    const xRatio = (e.clientX - rect.left) / rect.width;
-    const yRatio = (e.clientY - rect.top) / rect.height;
+    const naturalWidth = canvas.width;
+    const naturalHeight = canvas.height;
+
+    if (!naturalWidth || !naturalHeight || !rect.width || !rect.height) return null;
+
+    const elementRatio = rect.width / rect.height;
+    const imageRatio = naturalWidth / naturalHeight;
+
+    let renderWidth = rect.width;
+    let renderHeight = rect.height;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (elementRatio > imageRatio) {
+      // Letterbox on left and right
+      renderWidth = rect.height * imageRatio;
+      offsetX = (rect.width - renderWidth) / 2;
+    } else {
+      // Letterbox on top and bottom
+      renderHeight = rect.width / imageRatio;
+      offsetY = (rect.height - renderHeight) / 2;
+    }
+
+    const clientXInsideRender = e.clientX - rect.left - offsetX;
+    const clientYInsideRender = e.clientY - rect.top - offsetY;
+
+    // Normalized strictly 0.0 to 1.0 coordinates matching real web page
+    const xRatio = Math.max(0, Math.min(1, clientXInsideRender / renderWidth));
+    const yRatio = Math.max(0, Math.min(1, clientYInsideRender / renderHeight));
+
+    return { x: xRatio, y: yRatio };
+  };
+
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const coords = getCanvasNormalizedCoordinates(e);
+    if (!coords || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
     wsRef.current.send(
       JSON.stringify({
         type: "CANVAS_CLICK",
-        x: Math.max(0, Math.min(1, xRatio)),
-        y: Math.max(0, Math.min(1, yRatio)),
+        x: coords.x,
+        y: coords.y,
       })
     );
   };
 
-  // Canvas Mouse Wheel Forwarding
   const handleCanvasWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const xRatio = (e.clientX - rect.left) / rect.width;
-    const yRatio = (e.clientY - rect.top) / rect.height;
+    const coords = getCanvasNormalizedCoordinates(e);
+    if (!coords || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
     wsRef.current.send(
       JSON.stringify({
         type: "CANVAS_WHEEL",
-        x: Math.max(0, Math.min(1, xRatio)),
-        y: Math.max(0, Math.min(1, yRatio)),
+        x: coords.x,
+        y: coords.y,
         deltaX: e.deltaX,
         deltaY: e.deltaY,
       })
     );
-  };
-
-  // Toggle Voice Recording
-  const toggleVoiceRecording = () => {
-    if (isRecording) {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      setIsRecording(false);
-      return;
-    }
-
-    const SpeechRecognition =
-      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      alert("Speech recognition is not supported in this browser. Please use text input.");
-      return;
-    }
-
-    try {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = "en-US";
-
-      recognition.onstart = () => {
-        setIsRecording(true);
-      };
-
-      recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        if (transcript) {
-          handleExecute(transcript);
-        }
-      };
-
-      recognition.onerror = () => {
-        setIsRecording(false);
-      };
-
-      recognition.onend = () => {
-        setIsRecording(false);
-      };
-
-      recognitionRef.current = recognition;
-      recognition.start();
-    } catch (e) {
-      console.error("Speech error:", e);
-      setIsRecording(false);
-    }
   };
 
   return (
@@ -622,7 +512,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
       <header className="wh-top-header">
         <div className="wh-brand">
           <div className="wh-logo-orb">W</div>
-          <span className="wh-brand-title">wormhole</span>
+          <span className="wh-brand-title">warmhole</span>
           <span className="wh-brand-subtitle">your agentic workspace</span>
         </div>
 
@@ -705,7 +595,6 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                 onClick={() => {
                   setInputMode("voice");
                   setCurrentTheme("blue");
-                  toggleVoiceRecording();
                 }}
               >
                 🔈)) Voice
@@ -760,7 +649,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
               messages.map((m) => (
                 <div key={m.id} className={`wh-msg-card ${m.sender === "user" ? "wh-msg-user" : "wh-msg-agent"}`}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", fontSize: "10.5px", color: "var(--wh-text-muted)" }}>
-                    <span style={{ fontWeight: 800, color: m.sender === "user" ? "var(--wh-accent)" : "var(--wh-accent)" }}>
+                    <span style={{ fontWeight: 800, color: "var(--wh-accent)" }}>
                       {m.sender === "user" ? "YOU" : "WORMHOLE COPILOT"}
                     </span>
                     <span>{m.timestamp}</span>
@@ -794,43 +683,24 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                       />
                     </div>
                   )}
-
-                  {/* Telemetry Logs */}
-                  {m.steps && m.steps.length > 0 && (
-                    <div className="wh-telemetry-box">
-                      <div className="wh-telemetry-title">
-                        <span>⚡</span>
-                        <span>TELEMETRY LOGS ({m.steps.length})</span>
-                      </div>
-                      {m.steps.map((st, i) => (
-                        <div key={i} className="wh-telemetry-item">
-                          {st.action && <span className="wh-telemetry-action">{st.action}</span>}
-                          <span>{st.text}</span>
-                          {st.time && <span className="wh-telemetry-time">{st.time}</span>}
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               ))
             )}
 
-            {agentStatus === "RUNNING" && (
-              <div className="wh-thinking-box">
-                <div className="wh-thinking-spinner" />
-                <span>Wormhole Copilot active on real browser session...</span>
+            {/* TEMPORARY RUNNING TELEMETRY BANNER (MATCHES IMAGE 3) */}
+            {activeTelemetry && agentStatus === "RUNNING" && (
+              <div className="wh-running-telemetry-banner">
+                <span className="wh-telemetry-dot" />
+                <span className="wh-shimmer-text">{activeTelemetry}</span>
               </div>
             )}
           </div>
 
-          {/* BOTTOM DOCKED SEARCH BAR */}
+          {/* BOTTOM DOCKED SEARCH BAR (EXACT SAME AS INITIAL HERO SEARCH BAR) */}
           <div className="wh-bottom-bar">
-            {/* The EXACT same glowing pill AISearchBar docked here */}
             <AISearchBar
               isDocked={true}
               theme={currentTheme}
-              isListening={isRecording}
-              onToggleListening={toggleVoiceRecording}
               onAttachFile={handleFileUpload}
               onSearch={handleExecute}
             />

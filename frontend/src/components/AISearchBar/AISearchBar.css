@@ -518,3 +518,31 @@
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+
+/* Inline Speech-to-Text Mic Button inside Search Bar */
+.ai-search-mic-transcribe-btn {
+  background: transparent;
+  border: 0;
+  color: #a79bb5;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.ai-search-mic-transcribe-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ai-search-mic-transcribe-btn.recording {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.2);
+  animation: micPulse 1.2s infinite;
+}

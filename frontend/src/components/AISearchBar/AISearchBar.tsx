@@ -3,36 +3,34 @@ import "./AISearchBar.css";
 
 interface AISearchBarProps {
   onSearch?: (query: string) => void;
-  onActivateWormhole?: () => void;
+  onEnterVoiceMode?: () => void;
   title?: string;
   subtitle?: string;
   isSearchHidden?: boolean;
   theme?: "purple" | "blue";
   isDocked?: boolean;
-  isListening?: boolean;
-  onToggleListening?: () => void;
   onAttachFile?: (file: File) => void;
   initialValue?: string;
 }
 
 export const AISearchBar: React.FC<AISearchBarProps> = ({
   onSearch,
-  onActivateWormhole,
+  onEnterVoiceMode,
   title = "WHAT'S ON YOUR MIND?",
   subtitle = "Your AI. Your Universe. One Portal.",
   isSearchHidden = false,
   theme = "purple",
   isDocked = false,
-  isListening = false,
-  onToggleListening,
   onAttachFile,
   initialValue = "",
 }) => {
   const [query, setQuery] = useState(initialValue);
   const [isFocused, setIsFocused] = useState(false);
   const [attachedFileName, setAttachedFileName] = useState<string | null>(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const micRecognitionRef = useRef<any>(null);
 
   useEffect(() => {
     if (initialValue) {
@@ -54,12 +52,61 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
     }
   };
 
-  const handleWormholeClick = (e: React.MouseEvent) => {
+  // Mic Button: Transcribes speech into text input box ONLY (DOES NOT AUTO-SEND)
+  const toggleSpeechToTextInput = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (onToggleListening) {
-      onToggleListening();
-    } else if (onActivateWormhole) {
-      onActivateWormhole();
+
+    if (isTranscribing) {
+      micRecognitionRef.current?.stop();
+      setIsTranscribing(false);
+      return;
+    }
+
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert("Speech recognition is not supported in this browser.");
+      return;
+    }
+
+    try {
+      const rec = new SpeechRecognition();
+      rec.continuous = false;
+      rec.interimResults = false;
+      rec.lang = "en-US";
+
+      rec.onstart = () => {
+        setIsTranscribing(true);
+      };
+
+      rec.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        if (transcript) {
+          setQuery((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        }
+      };
+
+      rec.onerror = () => {
+        setIsTranscribing(false);
+      };
+
+      rec.onend = () => {
+        setIsTranscribing(false);
+      };
+
+      micRecognitionRef.current = rec;
+      rec.start();
+    } catch (err) {
+      console.error("Mic transcription error:", err);
+      setIsTranscribing(false);
+    }
+  };
+
+  const handleVoiceModeClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onEnterVoiceMode) {
+      onEnterVoiceMode();
     }
   };
 
@@ -116,7 +163,7 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
         <div className="ai-search-flare-top" />
         <div className="ai-search-flare-bottom" />
 
-        {/* Content Layout: Sparkle icon → Paperclip → Text input → Send button → Voice button */}
+        {/* Content Layout: Sparkle icon → Paperclip SVG → Text input → Mic transcription → Send button → Full Voice mode button */}
         <div className="ai-search-inner">
           {/* AI 4-Point Sparkle Icon */}
           <div className="ai-search-sparkle">
@@ -134,7 +181,7 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
             </svg>
           </div>
 
-          {/* Paperclip File Attachment Button inside Pill */}
+          {/* Crisp SVG Paperclip File Attachment Button (Matching Image 2) */}
           <button
             type="button"
             data-cursor="disable"
@@ -146,7 +193,19 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
             title={attachedFileName ? `Attached: ${attachedFileName}` : "Attach Document or Photo for Healing"}
             aria-label="Attach file"
           >
-            📎
+            <svg
+              className="ai-search-attach-icon"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+            </svg>
           </button>
 
           {/* Text Input ("Ask anything...") */}
@@ -157,10 +216,8 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
               data-cursor="disable"
               className="ai-search-input"
               placeholder={
-                theme === "blue"
-                  ? isListening
-                    ? "Listening... Speak your command now"
-                    : "Speak or type your command..."
+                isTranscribing
+                  ? "Transcribing voice to text..."
                   : attachedFileName
                   ? `[${attachedFileName}] Ask anything...`
                   : "Ask anything..."
@@ -177,9 +234,25 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
             />
           </div>
 
-          {/* Action Buttons: Send Button → Voice Waveform Button */}
+          {/* Action Buttons */}
           <div className="ai-search-actions">
-            {/* Glowing Send Button */}
+            {/* Inline Speech-to-Text Mic (Puts text in input box, user sends later) */}
+            <button
+              type="button"
+              data-cursor="disable"
+              className={`ai-search-mic-transcribe-btn ${isTranscribing ? "recording" : ""}`}
+              onClick={toggleSpeechToTextInput}
+              title={isTranscribing ? "Listening... click to stop" : "Speak to transcribe text into input"}
+              aria-label="Transcribe speech to text"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="22" />
+              </svg>
+            </button>
+
+            {/* Glowing Send / Proceed Button */}
             <button
               type="button"
               data-cursor="disable"
@@ -199,35 +272,31 @@ export const AISearchBar: React.FC<AISearchBarProps> = ({
               </svg>
             </button>
 
-            {/* Voice Assistant Waveform Button */}
-            <button
-              type="button"
-              data-cursor="disable"
-              className={`ai-search-wormhole-btn ${isListening ? "recording" : ""}`}
-              onClick={handleWormholeClick}
-              title={
-                theme === "blue"
-                  ? isListening
-                    ? "Mute / Stop Voice"
-                    : "Activate Listening"
-                  : "Switch to Wormhole Voice Mode"
-              }
-              aria-label="Voice Assistant"
-            >
-              <svg
-                className="ai-search-voice-icon"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
+            {/* Full Wormhole Voice Mode Button (Only in hero mode) */}
+            {!isDocked && onEnterVoiceMode && (
+              <button
+                type="button"
+                data-cursor="disable"
+                className="ai-search-wormhole-btn"
+                onClick={handleVoiceModeClick}
+                title="Open Wormhole Voice Mode"
+                aria-label="Wormhole Voice Mode"
               >
-                <rect x="3.25" y="8.5" width="2.5" height="7" rx="1.25" fill="currentColor" />
-                <rect x="8.25" y="3.5" width="2.5" height="17" rx="1.25" fill="currentColor" />
-                <rect x="13.25" y="6" width="2.5" height="12" rx="1.25" fill="currentColor" />
-                <rect x="18.25" y="8.5" width="2.5" height="7" rx="1.25" fill="currentColor" />
-              </svg>
-            </button>
+                <svg
+                  className="ai-search-voice-icon"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <rect x="3.25" y="8.5" width="2.5" height="7" rx="1.25" fill="currentColor" />
+                  <rect x="8.25" y="3.5" width="2.5" height="17" rx="1.25" fill="currentColor" />
+                  <rect x="13.25" y="6" width="2.5" height="12" rx="1.25" fill="currentColor" />
+                  <rect x="18.25" y="8.5" width="2.5" height="7" rx="1.25" fill="currentColor" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
       </div>
