@@ -25,6 +25,8 @@ if sys.platform.startswith('win'):
 
 load_dotenv()
 
+BASE_DIR = Path(__file__).resolve().parent
+
 from playwright.async_api import async_playwright
 from groq import Groq
 
@@ -98,41 +100,97 @@ class AgentCore:
 
     async def initialize(self):
         """Pre-warms Playwright Chromium and launches headless session if not running."""
-        if not self.browser:
+        if not self.context:
             await self.start_browser()
 
     async def start_browser(self):
-        """Spins up Playwright Chromium with stealth configs, multi-tab listeners, and CDP session."""
-        if self.browser:
+        """Spins up Playwright with persistent context, real Google Chrome executable, anti-detect stealth, and CDP session."""
+        if self.context:
             return
 
-        print("[AGENT CORE] Launching Chromium Browser Engine with Multi-Tab Architecture...")
+        print("[AGENT CORE] Launching Real Chrome Engine with Anti-Detect Stealth & Persistent Profile...")
         self.playwright = await async_playwright().start()
-        self.browser = await self.playwright.chromium.launch(
-            headless=True,
-            args=[
+
+        profile_dir = BASE_DIR / "browser_profile"
+        profile_dir.mkdir(exist_ok=True)
+
+        chrome_path_1 = Path("C:/Program Files/Google/Chrome/Application/chrome.exe")
+        chrome_path_2 = Path("C:/Program Files (x86)/Google/Chrome/Application/chrome.exe")
+        edge_path = Path("C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe")
+
+        channel_to_use = None
+        if chrome_path_1.exists() or chrome_path_2.exists():
+            channel_to_use = "chrome"
+            print("  -> Detected Official Google Chrome: enabling genuine Google Chrome channel.")
+        elif edge_path.exists():
+            channel_to_use = "msedge"
+            print("  -> Detected Microsoft Edge: enabling genuine Edge channel.")
+
+        launch_kwargs = {
+            "user_data_dir": str(profile_dir),
+            "headless": True,
+            "viewport": self.viewport_size,
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "args": [
                 "--disable-blink-features=AutomationControlled",
                 "--no-sandbox",
-                "--disable-infobars"
+                "--disable-infobars",
+                "--disable-dev-shm-usage",
+                "--no-first-run",
+                "--no-default-browser-check"
             ]
-        )
-        self.context = await self.browser.new_context(
-            viewport=self.viewport_size,
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-        )
-        
+        }
+        if channel_to_use:
+            launch_kwargs["channel"] = channel_to_use
+
+        try:
+            self.context = await self.playwright.chromium.launch_persistent_context(**launch_kwargs)
+        except Exception as e:
+            print(f"[!] Real Chrome launch fallback: {e}")
+            launch_kwargs.pop("channel", None)
+            self.context = await self.playwright.chromium.launch_persistent_context(**launch_kwargs)
+
+        self.browser = self.context.browser
+
+        # Anti-Detect Stealth: remove automation flag so Google Sign-In succeeds
+        await self.context.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
+            Object.defineProperty(navigator, 'plugins', {
+                get: () => [1, 2, 3, 4, 5]
+            });
+            Object.defineProperty(navigator, 'languages', {
+                get: () => ['en-US', 'en']
+            });
+            window.chrome = {
+                runtime: {},
+                loadTimes: function() {},
+                csi: function() {},
+                app: {}
+            };
+        """)
+
         # Listen for popup/target="_blank" tab creations
         self.context.on("page", lambda p: asyncio.create_task(self._on_new_page_created(p)))
 
-        self.page = await self.context.new_page()
-        
-        # Open default landing page
-        await self.page.goto("https://en.wikipedia.org")
+        # Get or create primary tab
+        if self.context.pages:
+            self.page = self.context.pages[0]
+        else:
+            self.page = await self.context.new_page()
+
+        # Open default landing page if fresh
+        if not self.page.url or self.page.url in ["about:blank", "chrome://newtab/"]:
+            try:
+                await self.page.goto("https://en.wikipedia.org", wait_until="domcontentloaded", timeout=15000)
+            except Exception:
+                pass
 
         # Attach CDP Screencast session to active page
         await self._attach_screencast_to_page(self.page)
         await self.broadcast_tabs()
-        print("[AGENT CORE] CDP Screencast stream & Multi-Tab Hub online.")
+        print("[AGENT CORE] CDP Screencast stream & Anti-Detect Real Chrome online.")
 
     async def _attach_screencast_to_page(self, target_page):
         """Safely attaches CDP screencast session to the specified page and cleans up old sessions."""
@@ -663,11 +721,23 @@ class AgentCore:
                     }
                 });
 
+                // 7. Email inbox messages / OTP Verification codes
+                const inboxMessages = [];
+                document.querySelectorAll('.mail-item, .email-item, .otp-code-card, #mail-otp-code, [id*="otp"], [class*="otp"]').forEach(el => {
+                    if (isVisible(el)) {
+                        const txt = cleanText(el.innerText);
+                        if (txt && !inboxMessages.includes(txt)) {
+                            inboxMessages.push(txt);
+                        }
+                    }
+                });
+
                 let output = [];
                 if (headings.length) output.push("=== PAGE HEADINGS ===\\n" + headings.join("\\n"));
                 if (navItems.length) output.push("=== NAVIGATION & SECTION LINKS ===\\n" + navItems.join("\\n"));
                 if (sectionTexts.length) output.push("=== PAGE & SECTION TEXT CONTENT ===\\n" + sectionTexts.join("\\n\\n"));
-                else if (paragraphs.length) output.push("=== PAGE & SECTION TEXT CONTENT ===\\n" + paragraphs.join("\\n\\n"));
+                if (paragraphs.length) output.push("=== PAGE PARAGRAPHS ===\\n" + paragraphs.join("\\n\\n"));
+                if (inboxMessages.length) output.push("=== INCOMING MESSAGES & VERIFICATION CODES ===\\n" + inboxMessages.join("\\n"));
                 if (formFields.length) output.push("=== FORM INPUT FIELDS & EDITORS ===\\n" + formFields.join("\\n"));
                 if (buttons.length) output.push("=== BUTTONS & SUBMIT CONTROLS ===\\n" + buttons.join("\\n"));
                 if (notices.length) output.push("=== NOTICES ON PAGE ===\\n" + notices.join("\\n"));
@@ -951,7 +1021,9 @@ class AgentCore:
                 action = await self._decide_next_action(
                     self.current_goal, curr_url, curr_title, dom_elements, self.current_context, tabs_summary
                 )
-                action_type = action.get("action", "wait").lower()
+                if isinstance(action, list):
+                    action = action[0] if len(action) > 0 else {}
+                action_type = (action.get("action") or "wait").lower()
                 selector = action.get("selector", "")
                 text_val = action.get("text", "")
                 reason = action.get("reason", "")
@@ -968,6 +1040,8 @@ class AgentCore:
                 else:
                     repeat_action_count = 0
                 prev_action_key = current_action_key
+
+                print(f"  [DECISION] Action: '{action_type}', Target: '{selector or action.get('url') or action.get('target') or text_val}', Reason: '{reason}'")
 
                 await self.broadcast({
                     "type": "ACTION",
@@ -996,8 +1070,8 @@ class AgentCore:
                             await self.page.goto(target_url, wait_until="domcontentloaded", timeout=20000)
                             await asyncio.sleep(1.5)
 
-                    elif action_type in ["open_tab", "new_tab"]:
-                        target_url = (action.get("url") or text_val or "about:blank").strip()
+                    elif action_type in ["open_tab", "new_tab", "open_new_tab", "tab_open"]:
+                        target_url = (action.get("url") or text_val or selector or "about:blank").strip()
                         if target_url and not target_url.startswith("http") and target_url != "about:blank":
                             target_url = f"https://{target_url}"
                         print(f"  -> [MULTI-TAB] Opening new tab with URL: {target_url}")
@@ -1005,8 +1079,8 @@ class AgentCore:
                         await self.open_new_tab(target_url)
                         await asyncio.sleep(2)
 
-                    elif action_type in ["switch_tab", "change_tab"]:
-                        target = action.get("target") if action.get("target") is not None else (action.get("index") or text_val or 0)
+                    elif action_type in ["switch_tab", "change_tab", "switch_to_tab", "select_tab"]:
+                        target = action.get("target") if action.get("target") is not None else (action.get("index") or text_val or selector or 0)
                         print(f"  -> [MULTI-TAB] Switching to tab: {target}")
                         await self.broadcast({"type": "ACTION", "action": "switch_tab", "target": str(target), "reason": reason})
                         switched = await self.switch_to_tab(target)
@@ -1014,8 +1088,8 @@ class AgentCore:
                             print(f"     [!] Tab switch could not find matching tab '{target}'. Available tabs: {len(self.context.pages)}")
                         await asyncio.sleep(1.5)
 
-                    elif action_type in ["close_tab"]:
-                        target = action.get("target") if action.get("target") is not None else action.get("index")
+                    elif action_type in ["close_tab", "close_current_tab"]:
+                        target = action.get("target") if action.get("target") is not None else (action.get("index") or selector)
                         print(f"  -> [MULTI-TAB] Closing tab: {target}")
                         await self.broadcast({"type": "ACTION", "action": "close_tab", "target": str(target), "reason": reason})
                         await self.close_tab(target)
@@ -1226,11 +1300,13 @@ class AgentCore:
             "     * Click 'Send OTP' / 'Send Verification Code' / 'Next'.\n"
             "   - AUTONOMOUS MULTI-TAB OTP RETRIEVAL WORKFLOW:\n"
             "     * When the site prompts for an OTP or verification code sent to the email:\n"
-            "       1) Check the Open Browser Tabs. If a Gmail / Webmail tab is NOT open, execute: {\"action\": \"open_tab\", \"url\": \"https://mail.google.com\", \"reason\": \"Opening Gmail in a new tab to retrieve the verification OTP.\"}\n"
-            "       2) If the Gmail / Webmail tab is ALREADY open, switch to it: {\"action\": \"switch_tab\", \"target\": \"gmail\", \"reason\": \"Switching to Gmail tab to inspect incoming verification code.\"}\n"
-            "       3) In the email inbox tab, locate the newest email from the service, extract the verification code (4, 6, or 8 digits) or verification link.\n"
-            "       4) Switch back to the application tab: {\"action\": \"switch_tab\", \"target\": 0, \"reason\": \"Switching back to application tab to enter OTP.\"}\n"
-            "       5) Type the retrieved OTP into the verification code input field (or use fill_form), submit/verify, and seamlessly continue executing the user's primary goal!\n"
+            "       1) Check the Open Browser Tabs. If a webmail / Gmail tab is NOT open:\n"
+            "          - If current site is mock portal (localhost:8000/mock/portal), open mock mail: {\"action\": \"open_tab\", \"url\": \"http://localhost:8000/mock/mail\", \"reason\": \"Opening mock webmail inbox to retrieve verification code.\"}\n"
+            "          - Otherwise for external websites, open webmail / Gmail: {\"action\": \"open_tab\", \"url\": \"https://mail.google.com\", \"reason\": \"Opening Gmail in a new tab to retrieve verification OTP.\"}\n"
+            "       2) If the Gmail / Webmail tab is ALREADY open, switch to it: {\"action\": \"switch_tab\", \"target\": \"mail\", \"reason\": \"Switching to webmail tab to inspect verification code.\"}\n"
+            "       3) In the email inbox tab, read the verification code (4, 6, or 8 digits) from '=== INCOMING MESSAGES & VERIFICATION CODES ==='.\n"
+            "       4) Switch back to the application or portal tab: {\"action\": \"switch_tab\", \"target\": 0, \"reason\": \"Switching back to portal tab to enter retrieved OTP code.\"}\n"
+            "       5) Type the retrieved OTP into the verification code input field (or use fill_form), click Verify/Submit, and seamlessly complete the task!\n"
             "   - You can open, switch, and close tabs as needed at any point during any trajectory.\n\n"
             "4. CONTACT & APPLICATION PROTOCOL:\n"
             "   - If the user wants to contact, connect, or hire, map name, email, and message into the fields.\n"
@@ -1284,7 +1360,7 @@ class AgentCore:
         messages.append({"role": "user", "content": user_msg})
 
         # Try active models with fallback in case of rate limits
-        models_to_try = ["qwen/qwen3.8-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+        models_to_try = ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b"]
         last_error = None
         for model_name in models_to_try:
             try:
@@ -1294,7 +1370,10 @@ class AgentCore:
                     temperature=0.1,
                     response_format={"type": "json_object"}
                 )
-                return json.loads(res.choices[0].message.content)
+                parsed = json.loads(res.choices[0].message.content)
+                if isinstance(parsed, list):
+                    parsed = parsed[0] if len(parsed) > 0 else {"action": "finish", "reason": "Empty action list"}
+                return parsed
             except Exception as e:
                 last_error = e
                 print(f"[!] Groq decision error with model {model_name}: {e}")

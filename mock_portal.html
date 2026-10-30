@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>QuickHire Portal - Candidate Sign In</title>
+  <style>
+    :root {
+      --bg: #090b16;
+      --card: rgba(18, 22, 40, 0.9);
+      --border: rgba(155, 170, 255, 0.16);
+      --cyan: #79e8f3;
+      --green: #79e7ba;
+      --violet: #a38cff;
+      --text: #f3f2ff;
+      --muted: #8b92b2;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: radial-gradient(circle at 50% 20%, #151833 0%, #080a14 100%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .portal-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 460px;
+      padding: 32px;
+      box-shadow: 0 16px 60px rgba(0,0,0,0.6);
+      backdrop-filter: blur(16px);
+    }
+    .logo-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .logo-badge {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--cyan), var(--violet));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      font-weight: 800;
+      color: #0b0e1b;
+    }
+    h1 { font-size: 20px; font-weight: 700; color: #fff; }
+    p.sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    
+    .google-btn {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: #e2e4f0;
+      font-size: 12.5px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: 0.2s;
+    }
+    .google-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+    .divider {
+      display: flex;
+      align-items: center;
+      text-align: center;
+      color: var(--muted);
+      font-size: 10.5px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin: 20px 0;
+    }
+    .divider:before, .divider:after {
+      content: '';
+      flex: 1;
+      border-bottom: 1px solid var(--border);
+    }
+    .divider:not(:empty):before { margin-right: 12px; }
+    .divider:not(:empty):after { margin-left: 12px; }
+
+    .field-group { margin-bottom: 16px; }
+    label { display: block; font-size: 11.5px; font-weight: 600; color: #ccd0ea; margin-bottom: 6px; }
+    input[type="email"], input[type="text"] {
+      width: 100%;
+      background: rgba(7, 9, 18, 0.7);
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 11px 13px;
+      color: #fff;
+      font-size: 13px;
+      outline: none;
+      transition: 0.2s;
+    }
+    input:focus { border-color: var(--cyan); box-shadow: 0 0 10px rgba(121,232,243,0.15); }
+    
+    .btn-action {
+      width: 100%;
+      background: linear-gradient(135deg, var(--cyan), var(--violet));
+      color: #080b18;
+      border: 0;
+      border-radius: 9px;
+      padding: 12px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 6px;
+      transition: 0.2s;
+    }
+    .btn-action:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+    /* Segmented OTP digit inputs */
+    .otp-digits-row {
+      display: flex;
+      gap: 8px;
+      justify-content: space-between;
+      margin: 12px 0 16px;
+    }
+    .otp-digit {
+      width: 48px;
+      height: 52px;
+      text-align: center;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--cyan);
+      background: rgba(7, 9, 18, 0.9);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      outline: none;
+    }
+    .otp-digit:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 12px rgba(121,232,243,0.25);
+    }
+
+    .notice {
+      font-size: 11px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      margin-top: 10px;
+      line-height: 1.4;
+    }
+    .notice-info { background: rgba(121,232,243,0.08); border: 1px solid rgba(121,232,243,0.25); color: #c0f4f9; }
+    .notice-success { background: rgba(121,231,186,0.1); border: 1px solid var(--green); color: var(--green); }
+    .notice-warn { background: rgba(255,193,7,0.1); border: 1px solid rgba(255,193,7,0.4); color: #ffd54f; }
+
+    #otp-section { display: none; }
+    #success-screen { display: none; text-align: center; padding: 10px 0; }
+  </style>
+</head>
+<body>
+
+  <div class="portal-box" id="portal-box">
+    
+    <div class="logo-row">
+      <div class="logo-badge">✦</div>
+      <div>
+        <h1>QuickHire Portal</h1>
+        <p class="sub">Autonomous Candidate Application Verification</p>
+      </div>
+    </div>
+
+    <!-- MAIN FORM -->
+    <div id="auth-flow">
+      <!-- Google Auth Button (Demonstrates automated browser restriction) -->
+      <button class="google-btn" id="btn-google-login" onclick="triggerGoogleNotice()">
+        <svg width="16" height="16" viewBox="0 0 24 24">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+        </svg>
+        <span>Continue with Google</span>
+      </button>
+
+      <div id="google-warning" class="notice notice-warn" style="display: none;">
+        ⚠️ <strong>Browser Security Notice:</strong> Google OAuth blocks automated agents with <em>"This browser or app may not be secure"</em>. Use the standard Email + OTP system below.
+      </div>
+
+      <div class="divider">or continue with email</div>
+
+      <!-- STEP 1: ENTER EMAIL -->
+      <div id="email-section">
+        <div class="field-group">
+          <label for="portal-email">Email Address</label>
+          <input type="email" id="portal-email" name="email" placeholder="yashwanth.kr.dbit@gmail.com" value="yashwanth.kr.dbit@gmail.com">
+        </div>
+        <button class="btn-action" id="btn-send-otp" onclick="sendOtpCode()">Send Verification Code</button>
+        <div id="email-notice" class="notice notice-info" style="display: none;"></div>
+      </div>
+
+      <!-- STEP 2: ENTER OTP -->
+      <div id="otp-section">
+        <label>Enter 6-Digit Verification Code</label>
+        <p style="font-size: 11px; color: var(--muted); margin-bottom: 8px;">
+          Code sent to your inbox. View it in tab <a href="/mock/mail" target="_blank" style="color: var(--cyan);">/mock/mail</a>
+        </p>
+
+        <!-- Segmented 6-digit input boxes for realistic multi-box testing -->
+        <div class="otp-digits-row">
+          <input type="text" maxlength="1" class="otp-digit" id="otp-1" oninput="moveToNext(this, 'otp-2')">
+          <input type="text" maxlength="1" class="otp-digit" id="otp-2" oninput="moveToNext(this, 'otp-3')">
+          <input type="text" maxlength="1" class="otp-digit" id="otp-3" oninput="moveToNext(this, 'otp-4')">
+          <input type="text" maxlength="1" class="otp-digit" id="otp-4" oninput="moveToNext(this, 'otp-5')">
+          <input type="text" maxlength="1" class="otp-digit" id="otp-5" oninput="moveToNext(this, 'otp-6')">
+          <input type="text" maxlength="1" class="otp-digit" id="otp-6" oninput="syncSingleOtp()">
+        </div>
+
+        <!-- Hidden/Direct full OTP field for direct automated fallback -->
+        <input type="text" id="portal-otp" name="otp" placeholder="Enter 6-digit code" oninput="syncFromFullOtp()" style="margin-bottom: 12px;">
+
+        <button class="btn-action" id="btn-verify-otp" onclick="verifyOtpCode()">Verify & Complete Login</button>
+        <div id="otp-notice" class="notice" style="display: none;"></div>
+      </div>
+
+    </div>
+
+    <!-- STEP 3: SUCCESS STATE -->
+    <div id="success-screen">
+      <div style="font-size: 48px; margin-bottom: 12px;">🎉</div>
+      <h2 style="font-size: 18px; color: var(--green); margin-bottom: 6px;">Login & Application Verified!</h2>
+      <p style="font-size: 12px; color: #d0d4ee; line-height: 1.5; margin-bottom: 16px;">
+        Welcome back, <strong>Yashwanth KR</strong>.<br>
+        Your credentials have been authenticated. Candidate profile active.
+      </p>
+      <div class="notice notice-success">
+        ✓ Session token minted · Ready for job dispatch
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    function triggerGoogleNotice() {
+      const w = document.getElementById("google-warning");
+      w.style.display = (w.style.display === "none") ? "block" : "none";
+    }
+
+    function moveToNext(current, nextId) {
+      if (current.value.length === 1 && nextId) {
+        document.getElementById(nextId).focus();
+      }
+      syncSingleOtp();
+    }
+
+    function syncSingleOtp() {
+      let full = "";
+      for (let i = 1; i <= 6; i++) {
+        full += (document.getElementById("otp-" + i).value || "").trim();
+      }
+      if (full.length > 0) {
+        document.getElementById("portal-otp").value = full;
+      }
+    }
+
+    function syncFromFullOtp() {
+      const val = (document.getElementById("portal-otp").value || "").trim();
+      if (val.length === 6) {
+        for (let i = 0; i < 6; i++) {
+          const digitEl = document.getElementById("otp-" + (i + 1));
+          if (digitEl) digitEl.value = val[i];
+        }
+      }
+    }
+
+    async function sendOtpCode() {
+      const email = document.getElementById("portal-email").value.trim();
+      const notice = document.getElementById("email-notice");
+      notice.style.display = "block";
+      notice.className = "notice notice-info";
+      notice.innerText = "Dispatching OTP verification code to " + email + "...";
+
+      try {
+        const res = await fetch("/api/mock/send_otp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json();
+        if (data.status === "SENT") {
+          notice.className = "notice notice-success";
+          notice.innerHTML = `✓ Verification code sent to <strong>${email}</strong>! Check your inbox tab at <a href="/mock/mail" target="_blank" style="color:var(--cyan)">/mock/mail</a>.`;
+          document.getElementById("otp-section").style.display = "block";
+          document.getElementById("otp-1").focus();
+        }
+      } catch(e) {
+        notice.className = "notice notice-warn";
+        notice.innerText = "Error sending OTP: " + e.message;
+      }
+    }
+
+    async function verifyOtpCode() {
+      let code = (document.getElementById("portal-otp").value || "").trim();
+      if (!code || code.length !== 6) {
+        let full = "";
+        for (let i = 1; i <= 6; i++) {
+          full += (document.getElementById("otp-" + i).value || "").trim();
+        }
+        if (full.length === 6) {
+          code = full;
+          document.getElementById("portal-otp").value = full;
+        }
+      }
+      const notice = document.getElementById("otp-notice");
+      notice.style.display = "block";
+
+      try {
+        const res = await fetch("/api/mock/verify_otp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ otp: code })
+        });
+        const data = await res.json();
+        if (data.status === "VALID") {
+          document.getElementById("auth-flow").style.display = "none";
+          document.getElementById("success-screen").style.display = "block";
+        } else {
+          notice.className = "notice notice-warn";
+          notice.innerText = "Invalid OTP code. Please check your inbox tab at /mock/mail and try again.";
+        }
+      } catch(e) {
+        notice.className = "notice notice-warn";
+        notice.innerText = "Verification error: " + e.message;
+      }
+    }
+  </script>
+</body>
+</html>

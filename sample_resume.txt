@@ -1,0 +1,19 @@
+YASHWANTH K R
+Bangalore, India | yashwanth.kr.dbit@gmail.com | +91 98450 12345
+GitHub: github.com/yash2006kr | LinkedIn: linkedin.com/in/yash2006kr
+
+EDUCATION
+Don Bosco Institute of Technology (DBIT), Bangalore
+Bachelor of Engineering (B.E.) in Computer Science & Engineering | 2025 - 2029
+CGPA: 8.85 / 10
+
+TECHNICAL SKILLS
+- Languages & Core: Java (Core & Advanced), Python, TypeScript, SQL
+- Architecture & Frameworks: FastAPI, Node.js, Express, Microservices, Distributed Systems
+- Autonomous Agentic AI: Playwright Automation, Chrome DevTools Protocol (CDP), Groq API, Multi-Tab Web Agents
+- Databases & Tools: PostgreSQL, SQLite, Docker, Git, REST APIs, Razorpay Integration
+
+PROJECTS
+1. Warmhole / ApplyCopilot: Autonomous Multi-Modal Web Agent with Multi-Tab Browser Orchestration, CDP Screencast Streaming, and Dynamic Form & OTP Handling.
+2. VoiceKirana: Offline Edge Intelligence Ledger for Retail Kirana Stores with vernacular voice processing.
+3. DataHeal: Resilient Data Pipeline & Schema Validation Engine with automated data quality recovery.

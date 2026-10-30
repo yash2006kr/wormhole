@@ -12,6 +12,7 @@ import os
 import sys
 import json
 import time
+import random
 import base64
 import asyncio
 from pathlib import Path
@@ -174,6 +175,65 @@ async def serve_ksrtc_mock():
 async def serve_checkout_mock():
     mock_file = BASE_DIR / "mock_checkout.html"
     return HTMLResponse(content=mock_file.read_text(encoding="utf-8"))
+
+# In-memory mock mail & OTP state
+latest_mock_email = {
+    "sender": "QuickHire Security System",
+    "email_from": "security@quickhire.io",
+    "subject": "Your Security Verification Code: 849201",
+    "otp": "849201",
+    "time": "Just now",
+    "body": "Hello Yashwanth, your single-use verification code for QuickHire Portal is provided below."
+}
+
+@app.get("/mock/portal", response_class=HTMLResponse)
+async def serve_portal_mock():
+    mock_file = BASE_DIR / "mock_portal.html"
+    return HTMLResponse(content=mock_file.read_text(encoding="utf-8"))
+
+@app.get("/mock/mail", response_class=HTMLResponse)
+async def serve_mail_mock():
+    mock_file = BASE_DIR / "mock_mail.html"
+    return HTMLResponse(content=mock_file.read_text(encoding="utf-8"))
+
+@app.post("/api/mock/send_otp")
+async def mock_send_otp(req: Request):
+    global latest_mock_email
+    try:
+        data = await req.json()
+    except Exception:
+        data = {}
+    email = data.get("email", "yashwanth.kr.dbit@gmail.com")
+    new_otp = str(random.randint(100000, 999999))
+    latest_mock_email = {
+        "sender": "QuickHire Security System",
+        "email_from": "security@quickhire.io",
+        "subject": f"Your Security Verification Code: {new_otp}",
+        "otp": new_otp,
+        "time": "Just now",
+        "body": f"Hello {email}, your single-use verification code for QuickHire Portal is {new_otp}. Valid for 10 minutes."
+    }
+    print(f"[MOCK AUTH] Generated new OTP {new_otp} for {email}")
+    return JSONResponse({"status": "SENT", "email": email, "otp": new_otp})
+
+@app.get("/api/mock/latest_mail")
+async def mock_get_latest_mail():
+    return JSONResponse({"status": "SUCCESS", "email": latest_mock_email})
+
+@app.post("/api/mock/verify_otp")
+async def mock_verify_otp(req: Request):
+    try:
+        data = await req.json()
+    except Exception:
+        data = {}
+    entered_otp = str(data.get("otp", "")).strip()
+    expected_otp = str(latest_mock_email.get("otp", "")).strip()
+    if entered_otp and entered_otp == expected_otp:
+        print(f"[MOCK AUTH] Successfully verified OTP: {entered_otp}")
+        return JSONResponse({"status": "VALID", "message": "Authenticated successfully"})
+    else:
+        print(f"[MOCK AUTH] Failed verification: entered '{entered_otp}', expected '{expected_otp}'")
+        return JSONResponse({"status": "INVALID", "message": "Code mismatch"}, status_code=400)
 
 @app.get("/proof/{filename}")
 async def serve_proof_image(filename: str):
