@@ -26,6 +26,7 @@ load_dotenv()
 import pypdfium2 as pdfium
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 # Core Engine Imports
 from agent_core import agent_core
@@ -164,8 +165,28 @@ async def websocket_screencast(websocket: WebSocket):
 # ==============================================================================
 # STATIC & MOCK ROUTES
 # ==============================================================================
+# Mount Vite built frontend assets if present
+FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
+if FRONTEND_DIST.exists():
+    if (FRONTEND_DIST / "assets").exists():
+        app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="dist_assets")
+    if (FRONTEND_DIST / "draco").exists():
+        app.mount("/draco", StaticFiles(directory=str(FRONTEND_DIST / "draco")), name="dist_draco")
+    if (FRONTEND_DIST / "models").exists():
+        app.mount("/models", StaticFiles(directory=str(FRONTEND_DIST / "models")), name="dist_models")
+    if (FRONTEND_DIST / "images").exists():
+        app.mount("/images", StaticFiles(directory=str(FRONTEND_DIST / "images")), name="dist_images")
+
 @app.get("/", response_class=HTMLResponse)
 async def serve_index():
+    dist_index = BASE_DIR / "frontend" / "dist" / "index.html"
+    if dist_index.exists():
+        return HTMLResponse(content=dist_index.read_text(encoding="utf-8"))
+    index_file = BASE_DIR / "static" / "index.html"
+    return HTMLResponse(content=index_file.read_text(encoding="utf-8"))
+
+@app.get("/classic", response_class=HTMLResponse)
+async def serve_classic_index():
     index_file = BASE_DIR / "static" / "index.html"
     return HTMLResponse(content=index_file.read_text(encoding="utf-8"))
 
