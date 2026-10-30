@@ -77,7 +77,7 @@ async def websocket_screencast(websocket: WebSocket):
     agent_core.active_websockets.add(websocket)
     print(f"[WS CONNECTED] Client joined screencast stream. Active viewers: {len(agent_core.active_websockets)}")
     
-    # Send immediate initial frame snapshot if available
+    # Send immediate initial frame snapshot and tabs state if available
     try:
         init_frame = await agent_core.get_current_frame_base64()
         if init_frame:
@@ -87,8 +87,18 @@ async def websocket_screencast(websocket: WebSocket):
                 "state": agent_core.state,
                 "url": agent_core.page.url if agent_core.page else ""
             }))
+        
+        # Broadcast initial open tabs
+        tabs = await agent_core.get_tabs_info()
+        curr_idx = next((t["index"] for t in tabs if t["active"]), 0)
+        await websocket.send_text(json.dumps({
+            "type": "TABS_UPDATE",
+            "tabs": tabs,
+            "active_index": curr_idx,
+            "url": agent_core.page.url if agent_core.page else ""
+        }))
     except Exception as e:
-        print(f"[!] Initial frame error: {e}")
+        print(f"[!] Initial frame/tabs error: {e}")
 
     try:
         while True:
@@ -129,6 +139,19 @@ async def websocket_screencast(websocket: WebSocket):
             # 6. User Finished Manual Handover (Login / CAPTCHA done)
             elif msg_type == "MANUAL_HANDOVER_DONE":
                 await agent_core.resume_from_manual_handover()
+
+            # 7. Multi-Tab Operations
+            elif msg_type == "TAB_OPEN":
+                url = data.get("url", "about:blank")
+                await agent_core.open_new_tab(url)
+
+            elif msg_type == "TAB_SWITCH":
+                target = data.get("index", data.get("target", 0))
+                await agent_core.switch_to_tab(target)
+
+            elif msg_type == "TAB_CLOSE":
+                target = data.get("index", data.get("target"))
+                await agent_core.close_tab(target)
 
     except WebSocketDisconnect:
         agent_core.active_websockets.discard(websocket)
@@ -238,6 +261,51 @@ async def direct_navigate(req: Request):
     
     await agent_core.direct_goto(url)
     return JSONResponse({"status": "NAVIGATING", "url": url})
+
+# ==============================================================================
+# BROWSER MULTI-TAB CONTROLS
+# ==============================================================================
+@app.get("/api/tabs")
+async def get_browser_tabs():
+    tabs = await agent_core.get_tabs_info()
+    curr_idx = next((t["index"] for t in tabs if t["active"]), 0)
+    return JSONResponse({"status": "SUCCESS", "tabs": tabs, "active_index": curr_idx})
+
+@app.post("/api/tabs/open")
+async def open_browser_tab(req: Request):
+    try:
+        data = await req.json()
+    except Exception:
+        data = {}
+    url = data.get("url", "about:blank")
+    await agent_core.open_new_tab(url)
+    tabs = await agent_core.get_tabs_info()
+    curr_idx = next((t["index"] for t in tabs if t["active"]), 0)
+    return JSONResponse({"status": "SUCCESS", "tabs": tabs, "active_index": curr_idx})
+
+@app.post("/api/tabs/switch")
+async def switch_browser_tab(req: Request):
+    try:
+        data = await req.json()
+    except Exception:
+        data = {}
+    target = data.get("index", data.get("target", 0))
+    await agent_core.switch_to_tab(target)
+    tabs = await agent_core.get_tabs_info()
+    curr_idx = next((t["index"] for t in tabs if t["active"]), 0)
+    return JSONResponse({"status": "SUCCESS", "tabs": tabs, "active_index": curr_idx})
+
+@app.post("/api/tabs/close")
+async def close_browser_tab(req: Request):
+    try:
+        data = await req.json()
+    except Exception:
+        data = {}
+    target = data.get("index", data.get("target"))
+    await agent_core.close_tab(target)
+    tabs = await agent_core.get_tabs_info()
+    curr_idx = next((t["index"] for t in tabs if t["active"]), 0)
+    return JSONResponse({"status": "SUCCESS", "tabs": tabs, "active_index": curr_idx})
 
 # ==============================================================================
 # AGENTIC EXECUTION API

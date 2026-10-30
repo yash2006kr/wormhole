@@ -61,7 +61,7 @@ class AgentCore:
         self.viewport_size = {"width": 1280, "height": 800}
 
     async def reset_session(self):
-        """Clears in-memory session history, uploaded files, and context when user clicks New Chat. Clears live browser to null."""
+        """Clears in-memory session history, uploaded files, and context when user clicks New Chat. Clears live browser to null and closes extra tabs."""
         print("[AGENT CORE] Resetting session memory for New Chat. Navigating browser to about:blank...")
         self.session_history = []
         self.session_files = []
@@ -74,24 +74,39 @@ class AgentCore:
         if self.execution_task and not self.execution_task.done():
             self.execution_task.cancel()
 
-        # Clear live webpage to null (about:blank)
-        if self.page:
+        # Close extra tabs, keeping only 1 clean blank tab
+        if self.context:
+            pages = list(self.context.pages)
+            if len(pages) > 1:
+                for p in pages[1:]:
+                    try:
+                        await p.close()
+                    except Exception:
+                        pass
+            first_page = self.context.pages[0] if self.context.pages else await self.context.new_page()
+            await self._attach_screencast_to_page(first_page)
             try:
-                await self.page.goto("about:blank", wait_until="domcontentloaded", timeout=8000)
-                await self.broadcast({
-                    "type": "URL_UPDATE",
-                    "url": "",
-                    "title": ""
-                })
+                await first_page.goto("about:blank", wait_until="domcontentloaded", timeout=8000)
             except Exception as e:
                 print(f"[!] Browser clear error on reset: {e}")
+            await self.broadcast_tabs()
+            await self.broadcast({
+                "type": "URL_UPDATE",
+                "url": "",
+                "title": ""
+            })
 
     async def initialize(self):
-        """Spins up Playwright Chromium with stealth configs and CDP session."""
+        """Pre-warms Playwright Chromium and launches headless session if not running."""
+        if not self.browser:
+            await self.start_browser()
+
+    async def start_browser(self):
+        """Spins up Playwright Chromium with stealth configs, multi-tab listeners, and CDP session."""
         if self.browser:
             return
 
-        print("[AGENT CORE] Launching Chromium Browser Engine...")
+        print("[AGENT CORE] Launching Chromium Browser Engine with Multi-Tab Architecture...")
         self.playwright = await async_playwright().start()
         self.browser = await self.playwright.chromium.launch(
             headless=True,
@@ -105,23 +120,203 @@ class AgentCore:
             viewport=self.viewport_size,
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
         )
+        
+        # Listen for popup/target="_blank" tab creations
+        self.context.on("page", lambda p: asyncio.create_task(self._on_new_page_created(p)))
+
         self.page = await self.context.new_page()
         
         # Open default landing page
         await self.page.goto("https://en.wikipedia.org")
 
-        # Establish Chrome DevTools Protocol Session
-        self.cdp = await self.context.new_cdp_session(self.page)
-        self.cdp.on("Page.screencastFrame", self._on_screencast_frame)
-        
-        await self.cdp.send("Page.startScreencast", {
-            "format": "jpeg",
-            "quality": 65,
-            "maxWidth": self.viewport_size["width"],
-            "maxHeight": self.viewport_size["height"],
-            "everyNthFrame": 1
+        # Attach CDP Screencast session to active page
+        await self._attach_screencast_to_page(self.page)
+        await self.broadcast_tabs()
+        print("[AGENT CORE] CDP Screencast stream & Multi-Tab Hub online.")
+
+    async def _attach_screencast_to_page(self, target_page):
+        """Safely attaches CDP screencast session to the specified page and cleans up old sessions."""
+        try:
+            if self.cdp:
+                try:
+                    await self.cdp.send("Page.stopScreencast")
+                except Exception:
+                    pass
+                try:
+                    await self.cdp.detach()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        self.page = target_page
+        try:
+            self.cdp = await self.context.new_cdp_session(target_page)
+            self.cdp.on("Page.screencastFrame", self._on_screencast_frame)
+            await self.cdp.send("Page.startScreencast", {
+                "format": "jpeg",
+                "quality": 65,
+                "maxWidth": self.viewport_size["width"],
+                "maxHeight": self.viewport_size["height"],
+                "everyNthFrame": 1
+            })
+        except Exception as e:
+            print(f"[!] Error attaching CDP screencast to target page: {e}")
+
+    async def _on_new_page_created(self, page):
+        """Handles background or popup tab creation triggered by websites."""
+        print(f"[AGENT CORE] Autonomous/popup tab created: {page.url}")
+        await asyncio.sleep(0.5)
+        await self.broadcast_tabs()
+
+    # --------------------------------------------------------------------------
+    # MULTI-TAB CONTROLS & MANAGEMENT
+    # --------------------------------------------------------------------------
+    async def get_tabs_info(self):
+        """Returns structured metadata for all open tabs in the browser context."""
+        if not self.context:
+            return []
+        tabs = []
+        pages = list(self.context.pages)
+        for i, p in enumerate(pages):
+            try:
+                t = await p.title()
+            except Exception:
+                t = "New Tab"
+            u = p.url or ""
+            tabs.append({
+                "index": i,
+                "title": t if t else ("Blank Tab" if u in ["", "about:blank"] else u),
+                "url": u,
+                "active": (p == self.page)
+            })
+        return tabs
+
+    async def broadcast_tabs(self):
+        """Broadcasts TABS_UPDATE to all connected frontend clients."""
+        try:
+            tabs_data = await self.get_tabs_info()
+            curr_idx = 0
+            for t in tabs_data:
+                if t["active"]:
+                    curr_idx = t["index"]
+                    break
+            await self.broadcast({
+                "type": "TABS_UPDATE",
+                "tabs": tabs_data,
+                "active_index": curr_idx,
+                "url": self.page.url if self.page else "",
+                "title": await self.page.title() if self.page else ""
+            })
+        except Exception as e:
+            print(f"[!] broadcast_tabs error: {e}")
+
+    async def open_new_tab(self, url="about:blank"):
+        """Opens a new tab in the browser, navigates to target URL, and switches screencast."""
+        print(f"[AGENT CORE] Opening new browser tab with URL: '{url}'...")
+        if not self.context:
+            return None
+        new_page = await self.context.new_page()
+        if url and url not in ["about:blank", ""]:
+            try:
+                await new_page.goto(url, wait_until="domcontentloaded", timeout=18000)
+            except Exception as e:
+                print(f"[!] Navigation error on new tab '{url}': {e}")
+        await self._attach_screencast_to_page(new_page)
+        await self.broadcast_tabs()
+        await self.broadcast({
+            "type": "URL_UPDATE",
+            "url": new_page.url or "",
+            "title": await new_page.title() if new_page else ""
         })
-        print("[AGENT CORE] CDP Screencast stream online.")
+        return new_page
+
+    async def switch_to_tab(self, target):
+        """Switches active tab by integer index, digit string, URL substring, or title keyword."""
+        if not self.context or not self.context.pages:
+            return False
+        pages = list(self.context.pages)
+        target_page = None
+
+        if isinstance(target, int):
+            if 0 <= target < len(pages):
+                target_page = pages[target]
+        elif isinstance(target, str):
+            target_str = target.strip()
+            if target_str.isdigit():
+                idx = int(target_str)
+                if 0 <= idx < len(pages):
+                    target_page = pages[idx]
+            if not target_page:
+                target_lower = target_str.lower()
+                for p in pages:
+                    p_url = (p.url or "").lower()
+                    try:
+                        p_title = (await p.title() or "").lower()
+                    except Exception:
+                        p_title = ""
+                    if target_lower in p_url or target_lower in p_title:
+                        target_page = p
+                        break
+                # Domain/alias heuristics
+                if not target_page and ("gmail" in target_lower or "mail" in target_lower or "email" in target_lower or "otp" in target_lower):
+                    for p in pages:
+                        if "mail.google.com" in (p.url or "").lower():
+                            target_page = p
+                            break
+
+        if target_page:
+            if target_page != self.page:
+                print(f"[AGENT CORE] Switching to tab: {target_page.url}")
+                await self._attach_screencast_to_page(target_page)
+            await self.broadcast_tabs()
+            await self.broadcast({
+                "type": "URL_UPDATE",
+                "url": self.page.url or "",
+                "title": await self.page.title() if self.page else ""
+            })
+            return True
+        return False
+
+    async def close_tab(self, target=None):
+        """Closes specified tab or currently active tab. Keeps at least one tab open."""
+        if not self.context or not self.context.pages:
+            return
+        pages = list(self.context.pages)
+        if len(pages) <= 1:
+            if self.page:
+                await self.page.goto("about:blank")
+            await self.broadcast_tabs()
+            return
+
+        to_close = self.page
+        if isinstance(target, int) and 0 <= target < len(pages):
+            to_close = pages[target]
+        elif isinstance(target, str) and target.strip().isdigit():
+            idx = int(target.strip())
+            if 0 <= idx < len(pages):
+                to_close = pages[idx]
+
+        new_active = None
+        if to_close == self.page:
+            curr_idx = pages.index(to_close)
+            new_active = pages[curr_idx - 1] if curr_idx > 0 else pages[1]
+
+        try:
+            await to_close.close()
+        except Exception as e:
+            print(f"[!] Error closing page: {e}")
+
+        if new_active:
+            await self._attach_screencast_to_page(new_active)
+
+        await self.broadcast_tabs()
+        if self.page:
+            await self.broadcast({
+                "type": "URL_UPDATE",
+                "url": self.page.url or "",
+                "title": await self.page.title() if self.page else ""
+            })
 
     async def _on_screencast_frame(self, event):
         """Pushes real-time JPEG screencast frames to all connected frontend clients."""
@@ -554,9 +749,24 @@ class AgentCore:
         return False
 
     async def _fill_any_input(self, selector, value):
-        """Fills standard inputs, textareas, and rich contenteditable textboxes (Indeed, LinkedIn)."""
+        """Fills standard inputs, textareas, segmented OTP code boxes, and rich contenteditable textboxes (Indeed, LinkedIn)."""
         if not self.page:
             return False
+
+        # Check for segmented OTP inputs (e.g. 4 or 6 separate single-digit boxes)
+        val_str = str(value).strip()
+        if val_str.isdigit() and len(val_str) in [4, 5, 6, 8]:
+            try:
+                segmented_boxes = await self.page.locator("input[maxlength='1'], input.otp-digit, input[name*='otp' i]").all()
+                if len(segmented_boxes) == len(val_str):
+                    print(f"  -> Detected segmented OTP field ({len(segmented_boxes)} boxes). Auto-distributing code...")
+                    for idx, char in enumerate(val_str):
+                        await segmented_boxes[idx].click()
+                        await segmented_boxes[idx].fill(char)
+                        await asyncio.sleep(0.04)
+                    return True
+            except Exception as e:
+                print(f"  [!] Segmented OTP notice: {e}")
 
         loc = self.page.locator(selector).first
         if await loc.count() == 0:
@@ -708,31 +918,38 @@ class AgentCore:
                 print(f"\n--- STEP {step_count}/{max_steps} | URL: {curr_url} ---")
                 await self.broadcast({"type": "STEP", "step": step_count, "url": curr_url, "title": curr_title})
 
-                # Check for Human Verification / Login / Payment Gate
+                # Check for explicit Bot Challenge / CAPTCHA / Payment Gateway requiring manual verification
                 is_human_gate = any(k in curr_url.lower() for k in [
-                    "login", "signin", "checkout", "payment", "captcha", "recaptcha", "turnstile", "challenge", "verify", "auth"
+                    "checkout", "payment", "recaptcha", "turnstile", "challenge", "hcaptcha"
                 ]) or any(k in curr_title.lower() for k in [
-                    "login", "sign in", "security check", "captcha", "verification", "one-time password", "otp"
+                    "security challenge", "cloudflare challenge", "captcha", "payment gateway"
                 ])
 
                 if is_human_gate:
-                    print(f"[SAFETY TRIGGER] Human Verification / Login / CAPTCHA detected on '{curr_title}'. Pausing for user.")
+                    print(f"[SAFETY TRIGGER] Human Verification / CAPTCHA detected on '{curr_title}'. Pausing for user.")
                     self.state = "PAUSED_FOR_HUMAN"
                     await self.broadcast({
                         "type": "HUMAN_VERIFICATION_REQUIRED",
                         "state": "PAUSED_FOR_HUMAN",
                         "url": curr_url,
                         "title": curr_title,
-                        "message": "Human verification or Login required. Please complete this step directly on the website."
+                        "message": "Human verification or security challenge required. Please complete this step directly on the website."
                     })
                     await self.resume_event.wait()
+
+                # Query open browser tabs
+                tabs_list = await self.get_tabs_info()
+                tabs_summary = "Open Browser Tabs:\n" + "\n".join([
+                    f"- Tab {t['index']}{' (ACTIVE)' if t['active'] else ''}: {t['url']} ({t['title']})"
+                    for t in tabs_list
+                ])
 
                 # Extract live interactive DOM elements (including rich editors)
                 dom_elements = await self._get_interactive_dom_elements()
 
                 # Ask Groq LPU for next action (providing full multi-turn session context & resume data)
                 action = await self._decide_next_action(
-                    self.current_goal, curr_url, curr_title, dom_elements, self.current_context
+                    self.current_goal, curr_url, curr_title, dom_elements, self.current_context, tabs_summary
                 )
                 action_type = action.get("action", "wait").lower()
                 selector = action.get("selector", "")
@@ -778,6 +995,31 @@ class AgentCore:
                             print(f"  -> Navigating to: {target_url}")
                             await self.page.goto(target_url, wait_until="domcontentloaded", timeout=20000)
                             await asyncio.sleep(1.5)
+
+                    elif action_type in ["open_tab", "new_tab"]:
+                        target_url = (action.get("url") or text_val or "about:blank").strip()
+                        if target_url and not target_url.startswith("http") and target_url != "about:blank":
+                            target_url = f"https://{target_url}"
+                        print(f"  -> [MULTI-TAB] Opening new tab with URL: {target_url}")
+                        await self.broadcast({"type": "ACTION", "action": "open_tab", "url": target_url, "reason": reason})
+                        await self.open_new_tab(target_url)
+                        await asyncio.sleep(2)
+
+                    elif action_type in ["switch_tab", "change_tab"]:
+                        target = action.get("target") if action.get("target") is not None else (action.get("index") or text_val or 0)
+                        print(f"  -> [MULTI-TAB] Switching to tab: {target}")
+                        await self.broadcast({"type": "ACTION", "action": "switch_tab", "target": str(target), "reason": reason})
+                        switched = await self.switch_to_tab(target)
+                        if not switched:
+                            print(f"     [!] Tab switch could not find matching tab '{target}'. Available tabs: {len(self.context.pages)}")
+                        await asyncio.sleep(1.5)
+
+                    elif action_type in ["close_tab"]:
+                        target = action.get("target") if action.get("target") is not None else action.get("index")
+                        print(f"  -> [MULTI-TAB] Closing tab: {target}")
+                        await self.broadcast({"type": "ACTION", "action": "close_tab", "target": str(target), "reason": reason})
+                        await self.close_tab(target)
+                        await asyncio.sleep(1)
 
                     elif action_type == "fill_form":
                         fields = action.get("fields", {})
@@ -945,8 +1187,8 @@ class AgentCore:
             print(f"[AGENT LOOP FATAL] Error: {e}")
             self.state = "IDLE"
 
-    async def _decide_next_action(self, goal, curr_url, curr_title, dom_elements="", context_info=""):
-        """Queries Groq LPU with cognitive policy, DOM context, multi-turn history, and resume data."""
+    async def _decide_next_action(self, goal, curr_url, curr_title, dom_elements="", context_info="", tabs_summary=""):
+        """Queries Groq LPU with cognitive policy, DOM context, multi-turn history, multi-tab state, and resume data."""
         # Fast rule-based heuristics for search engines
         if ("google.com" in curr_url or "bing.com" in curr_url) and "search" in goal.lower():
             return {
@@ -958,9 +1200,9 @@ class AgentCore:
             }
 
         sys_prompt = (
-            "You are Jarvis-Wormhole, an elite autonomous web navigation, form-filling, and web intelligence agent operating in an active multi-turn session.\n"
+            "You are Jarvis-Wormhole, an elite autonomous web navigation, form-filling, multi-tab orchestration, and web intelligence agent operating in an active multi-turn session.\n"
             "You MUST remember all previous user requests and your previous responses in this session. If the user asks a follow-up question (e.g. 'tell me more', 'what degree did you mention', 'add job description based on resume', 'change that', 'what else'), you must refer to and build upon the earlier conversation context.\n"
-            "Your objective is to inspect the active web page, understand the user's intent, and execute the exact right sequence of browser actions or directly formulate intelligent responses in chat.\n\n"
+            "Your objective is to inspect the active web page and open browser tabs, understand the user's intent, and execute the exact right sequence of browser actions or directly formulate intelligent responses in chat.\n\n"
             "=== COGNITIVE PROTOCOLS ===\n"
             "1. INFORMATION EXTRACTION & CHAT Q&A PROTOCOL (HIGH PRIORITY):\n"
             "   - If the user asks a question, requests information, or asks to 'fetch about details', 'tell me about', 'what does the page say', 'summarize', 'who is...', 'what skills...', or 'give it in chat':\n"
@@ -968,24 +1210,42 @@ class AgentCore:
             "     * If on an SPA where a relevant section (e.g. `a[href='#about']`, `text=About`) is not active, you can click it so it displays in the live screencast, OR if the section text is already present in '=== PAGE & SECTION TEXT CONTENT ===', synthesize the answer immediately!\n"
             "     * Synthesize a rich, professional, well-formatted response (using markdown bolding `**` and bullet points `•`) providing the exact details, philosophy, bio, skills, education, or facts extracted from the page.\n"
             "     * Return action 'respond' with your synthesized answer in the 'message' field:\n"
-            "       {\"action\": \"respond\", \"message\": \"Here are the About details from the portfolio:\\n\\n• **Core Philosophy**: ...\\n• **Education & Background**: ...\\n• **Key Specialization**: ...\", \"reason\": \"Extracted requested details from the website and presented to the user in chat.\", \"finish\": true}\n\n"
+            "       {\"action\": \"respond\", \"message\": \"Here are the requested details:\\n\\n• **Profile**: ...\\n• **Background**: ...\", \"reason\": \"Extracted requested details from the website and presented to the user in chat.\", \"finish\": true}\n\n"
             "2. JOB DESCRIPTION / RESUME SYNTHESIS PROTOCOL:\n"
             "   - If the user asks to 'add job description', 'describe the job', 'fill description', or 'post job', AND a candidate resume or profile is provided in context:\n"
             "     * Extract the candidate's core role, domain, technical stack, skills, and qualifications from the uploaded resume.\n"
             "     * Synthesize a comprehensive, professional, complete Job Description tailored to that role (including Role Overview, Key Responsibilities, Required Skills, and Qualifications).\n"
             "     * Target the Job Description editor on the page (e.g. `div[contenteditable='true']`, `[role='textbox']`, `textarea[name*='description' i]`, or `[aria-label*='Job description']`).\n"
             "     * Use action 'fill_form' or 'type' with the complete synthesized job description text to populate the field!\n\n"
-            "3. CONTACT & APPLICATION PROTOCOL:\n"
+            "3. AUTONOMOUS MULTI-TAB & OTP AUTHENTICATION PROTOCOL:\n"
+            "   - The user often gives high-level goals like 'Apply to this job', 'Book ticket on ...', 'Post an update on ...', 'Login and update profile', WITHOUT mentioning login or verification steps.\n"
+            "   - You MUST autonomously recognize when completing the task requires logging in, verifying identity, or confirming an OTP.\n"
+            "   - CRITICAL GOOGLE SIGN-IN RESTRICTION: Automated browsers are blocked by Google bot detection ('403: disallowed_useragent' / 'This browser or app may not be secure').\n"
+            "     * NEVER click 'Continue with Google', 'Sign in with Google', or Google OAuth popups!\n"
+            "     * ALWAYS select manual Email/Password/OTP: e.g. click 'Sign in with Email', 'Continue with Email', 'Login with OTP', or enter candidate email from context (e.g. yashwanth.kr.dbit@gmail.com).\n"
+            "     * Click 'Send OTP' / 'Send Verification Code' / 'Next'.\n"
+            "   - AUTONOMOUS MULTI-TAB OTP RETRIEVAL WORKFLOW:\n"
+            "     * When the site prompts for an OTP or verification code sent to the email:\n"
+            "       1) Check the Open Browser Tabs. If a Gmail / Webmail tab is NOT open, execute: {\"action\": \"open_tab\", \"url\": \"https://mail.google.com\", \"reason\": \"Opening Gmail in a new tab to retrieve the verification OTP.\"}\n"
+            "       2) If the Gmail / Webmail tab is ALREADY open, switch to it: {\"action\": \"switch_tab\", \"target\": \"gmail\", \"reason\": \"Switching to Gmail tab to inspect incoming verification code.\"}\n"
+            "       3) In the email inbox tab, locate the newest email from the service, extract the verification code (4, 6, or 8 digits) or verification link.\n"
+            "       4) Switch back to the application tab: {\"action\": \"switch_tab\", \"target\": 0, \"reason\": \"Switching back to application tab to enter OTP.\"}\n"
+            "       5) Type the retrieved OTP into the verification code input field (or use fill_form), submit/verify, and seamlessly continue executing the user's primary goal!\n"
+            "   - You can open, switch, and close tabs as needed at any point during any trajectory.\n\n"
+            "4. CONTACT & APPLICATION PROTOCOL:\n"
             "   - If the user wants to contact, connect, or hire, map name, email, and message into the fields.\n"
             "   - In Single-Page Applications (SPAs), sections like Contact are often hidden until you click their navigation tab (e.g. `a[href='#connect']`).\n\n"
-            "4. SUPPORTED ACTIONS (JSON):\n"
+            "5. SUPPORTED ACTIONS (JSON):\n"
             "   1. respond: {\"action\": \"respond\", \"message\": \"synthesized comprehensive markdown text response to answer user question in chat\", \"reason\": \"...\", \"finish\": true}\n"
             "   2. fill_form: {\"action\": \"fill_form\", \"fields\": {\"field_selector\": \"text_content_to_insert\"}, \"submit_selector\": \"optional_btn\", \"finish_after\": true, \"reason\": \"...\"}\n"
             "   3. click: {\"action\": \"click\", \"selector\": \"a[href='#...'] or button_selector\", \"reason\": \"...\"}\n"
             "   4. type: {\"action\": \"type\", \"selector\": \"selector\", \"text\": \"string\", \"press_enter\": false, \"reason\": \"...\"}\n"
             "   5. navigate: {\"action\": \"navigate\", \"text\": \"https://...\", \"reason\": \"...\"}\n"
-            "   6. scroll: {\"action\": \"scroll\", \"reason\": \"...\"}\n"
-            "   7. finish: {\"action\": \"finish\", \"reason\": \"...\"}\n\n"
+            "   6. open_tab: {\"action\": \"open_tab\", \"url\": \"https://...\", \"reason\": \"...\"}\n"
+            "   7. switch_tab: {\"action\": \"switch_tab\", \"target\": 0 or \"gmail\" or \"url_substring\", \"reason\": \"...\"}\n"
+            "   8. close_tab: {\"action\": \"close_tab\", \"target\": 1, \"reason\": \"...\"}\n"
+            "   9. scroll: {\"action\": \"scroll\", \"reason\": \"...\"}\n"
+            "   10. finish: {\"action\": \"finish\", \"reason\": \"...\"}\n\n"
             "Always return valid JSON only."
         )
 
@@ -1016,8 +1276,9 @@ class AgentCore:
         user_msg = (
             f"Current User Goal: {goal}\n\n"
             f"Active Web Page: {curr_url} ('{curr_title}')\n\n"
+            f"Browser Multi-Tab State:\n{tabs_summary}\n\n"
             f"Attached Document / Candidate Resume Data:\n{context_info}\n\n"
-            f"Structured DOM Elements on Page:\n{dom_elements}\n\n"
+            f"Structured DOM Elements on Active Page:\n{dom_elements}\n\n"
             f"Note: Maintain continuous memory of all previous turns. If the user refers to past responses, earlier questions, or resume details, use that conversation history to answer or act accurately."
         )
         messages.append({"role": "user", "content": user_msg})
