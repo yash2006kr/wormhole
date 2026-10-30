@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import "./AISearchBar.css";
 
 interface AISearchBarProps {
@@ -7,18 +7,38 @@ interface AISearchBarProps {
   title?: string;
   subtitle?: string;
   isSearchHidden?: boolean;
+  theme?: "purple" | "blue";
+  isDocked?: boolean;
+  isListening?: boolean;
+  onToggleListening?: () => void;
+  onAttachFile?: (file: File) => void;
+  initialValue?: string;
 }
 
-const AISearchBar: React.FC<AISearchBarProps> = ({
+export const AISearchBar: React.FC<AISearchBarProps> = ({
   onSearch,
   onActivateWormhole,
   title = "WHAT'S ON YOUR MIND?",
   subtitle = "Your AI. Your Universe. One Portal.",
   isSearchHidden = false,
+  theme = "purple",
+  isDocked = false,
+  isListening = false,
+  onToggleListening,
+  onAttachFile,
+  initialValue = "",
 }) => {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialValue);
   const [isFocused, setIsFocused] = useState(false);
+  const [attachedFileName, setAttachedFileName] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (initialValue) {
+      setQuery(initialValue);
+    }
+  }, [initialValue]);
 
   const handleContainerClick = () => {
     inputRef.current?.focus();
@@ -26,26 +46,44 @@ const AISearchBar: React.FC<AISearchBarProps> = ({
 
   const handleSend = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!query.trim()) return;
+    if (!query.trim() && !attachedFileName) return;
     if (onSearch) {
       onSearch(query.trim());
+      setQuery("");
+      setAttachedFileName(null);
     }
   };
 
   const handleWormholeClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (onActivateWormhole) {
+    if (onToggleListening) {
+      onToggleListening();
+    } else if (onActivateWormhole) {
       onActivateWormhole();
     }
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setAttachedFileName(file.name);
+      if (onAttachFile) {
+        onAttachFile(file);
+      }
+    }
+  };
+
   return (
-    <div className="ai-search-wrapper">
-      {/* Header Tagline */}
-      <div className="ai-search-header">
-        <h2 className="ai-search-title">{title}</h2>
-        <p className="ai-search-subtitle">{subtitle}</p>
-      </div>
+    <div
+      className={`ai-search-wrapper theme-${theme} ${isDocked ? "docked" : ""}`}
+    >
+      {/* Header Tagline - shown only in full / hero mode */}
+      {!isDocked && (
+        <div className="ai-search-header">
+          <h2 className="ai-search-title">{title}</h2>
+          <p className="ai-search-subtitle">{subtitle}</p>
+        </div>
+      )}
 
       {/* Main Pill Search Bar */}
       <div
@@ -54,6 +92,15 @@ const AISearchBar: React.FC<AISearchBarProps> = ({
         }`}
         onClick={handleContainerClick}
       >
+        {/* Hidden File Input */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          style={{ display: "none" }}
+          onChange={handleFileChange}
+          accept="image/*,.pdf,.doc,.docx,.txt"
+        />
+
         {/* Outer Glow Backdrop */}
         <div className="ai-search-glow-backdrop" />
 
@@ -69,7 +116,7 @@ const AISearchBar: React.FC<AISearchBarProps> = ({
         <div className="ai-search-flare-top" />
         <div className="ai-search-flare-bottom" />
 
-        {/* Content Layout: Sparkle icon → Text input → Existing send button → New Wormhole agent symbol */}
+        {/* Content Layout: Sparkle icon → Paperclip → Text input → Send button → Voice button */}
         <div className="ai-search-inner">
           {/* AI 4-Point Sparkle Icon */}
           <div className="ai-search-sparkle">
@@ -87,6 +134,21 @@ const AISearchBar: React.FC<AISearchBarProps> = ({
             </svg>
           </div>
 
+          {/* Paperclip File Attachment Button inside Pill */}
+          <button
+            type="button"
+            data-cursor="disable"
+            className={`ai-search-attach-btn ${attachedFileName ? "attached" : ""}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              fileInputRef.current?.click();
+            }}
+            title={attachedFileName ? `Attached: ${attachedFileName}` : "Attach Document or Photo for Healing"}
+            aria-label="Attach file"
+          >
+            📎
+          </button>
+
           {/* Text Input ("Ask anything...") */}
           <div className="ai-search-input-box">
             <input
@@ -94,7 +156,15 @@ const AISearchBar: React.FC<AISearchBarProps> = ({
               type="text"
               data-cursor="disable"
               className="ai-search-input"
-              placeholder="Ask anything..."
+              placeholder={
+                theme === "blue"
+                  ? isListening
+                    ? "Listening... Speak your command now"
+                    : "Speak or type your command..."
+                  : attachedFileName
+                  ? `[${attachedFileName}] Ask anything...`
+                  : "Ask anything..."
+              }
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onFocus={() => setIsFocused(true)}
@@ -107,15 +177,15 @@ const AISearchBar: React.FC<AISearchBarProps> = ({
             />
           </div>
 
-          {/* Action Buttons: Existing Send Button → New Wormhole Agent Symbol */}
+          {/* Action Buttons: Send Button → Voice Waveform Button */}
           <div className="ai-search-actions">
-            {/* Existing Glowing Orb Send Button */}
+            {/* Glowing Send Button */}
             <button
               type="button"
               data-cursor="disable"
               className="ai-search-send-btn"
               onClick={handleSend}
-              title="Submit query"
+              title="Submit query / Proceed"
               aria-label="Send query"
             >
               <svg
@@ -129,14 +199,20 @@ const AISearchBar: React.FC<AISearchBarProps> = ({
               </svg>
             </button>
 
-            {/* 4. Voice Assistant Waveform Button (FAR RIGHT) */}
+            {/* Voice Assistant Waveform Button */}
             <button
               type="button"
               data-cursor="disable"
-              className="ai-search-wormhole-btn"
+              className={`ai-search-wormhole-btn ${isListening ? "recording" : ""}`}
               onClick={handleWormholeClick}
-              title="Activate Wormhole Voice Assistant"
-              aria-label="Activate Wormhole Voice Assistant"
+              title={
+                theme === "blue"
+                  ? isListening
+                    ? "Mute / Stop Voice"
+                    : "Activate Listening"
+                  : "Switch to Wormhole Voice Mode"
+              }
+              aria-label="Voice Assistant"
             >
               <svg
                 className="ai-search-voice-icon"

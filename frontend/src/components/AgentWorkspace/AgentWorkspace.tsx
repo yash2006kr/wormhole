@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import "./AgentWorkspace.css";
+import AISearchBar from "../AISearchBar/AISearchBar";
 
 interface Tab {
   index: number;
@@ -10,8 +11,8 @@ interface Tab {
 
 interface MessageStep {
   text: string;
+  action?: string;
   time?: string;
-  icon?: string;
 }
 
 interface ChatMessage {
@@ -22,20 +23,25 @@ interface ChatMessage {
   steps?: MessageStep[];
   emergency?: boolean;
   telemetry?: any;
+  proofImage?: string;
 }
 
 interface AgentWorkspaceProps {
   initialPrompt?: string;
+  initialFile?: File | null;
+  theme?: "purple" | "blue";
   onReset?: () => void;
 }
 
 export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
   initialPrompt,
+  initialFile,
+  theme = "purple",
   onReset,
 }) => {
+  const [currentTheme, setCurrentTheme] = useState<"purple" | "blue">(theme);
   const [layout, setLayout] = useState<"default" | "wide" | "5050">("default");
-  const [inputMode, setInputMode] = useState<"text" | "voice">("text");
-  const [prompt, setPrompt] = useState("");
+  const [inputMode, setInputMode] = useState<"text" | "voice">(theme === "blue" ? "voice" : "text");
   const [agentStatus, setAgentStatus] = useState<"IDLE" | "RUNNING" | "PAUSED_FOR_HUMAN" | "SUCCESS" | "ERROR">("IDLE");
   const [wsConnected, setWsConnected] = useState(false);
   const [urlInput, setUrlInput] = useState("about:blank");
@@ -46,21 +52,21 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const [interactiveMode, setInteractiveMode] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
-
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const recognitionRef = useRef<any>(null);
 
+  // Auto-scroll chat feed
   useEffect(() => {
     if (chatScrollRef.current) {
       chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
     }
   }, [messages, agentStatus]);
 
+  // Connect WebSocket to real-time agent screencast & telemetry
   useEffect(() => {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const host = window.location.host || "localhost:8000";
@@ -83,13 +89,16 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
         };
 
         socket.onerror = (err) => {
-          console.error("[WS] Error:", err);
+          console.error("[WS] Screencast error:", err);
           socket.close();
         };
 
         socket.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
+            const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+
+            // 1. Live Frame
             if (data.type === "FRAME" && data.data) {
               const canvas = canvasRef.current;
               if (canvas) {
@@ -111,7 +120,10 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                 else if (data.state === "PAUSED_FOR_HUMAN") setAgentStatus("PAUSED_FOR_HUMAN");
                 else if (data.state === "IDLE") setAgentStatus("IDLE");
               }
-            } else if (data.type === "TABS_UPDATE") {
+            }
+
+            // 2. Tabs Update
+            else if (data.type === "TABS_UPDATE") {
               if (Array.isArray(data.tabs)) {
                 setTabs(data.tabs);
                 setActiveTabIndex(data.active_index ?? 0);
@@ -120,20 +132,25 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                 setCurrentUrl(data.url);
                 setUrlInput(data.url);
               }
-            } else if (data.type === "STATE_CHANGE") {
+            }
+
+            // 3. State Change
+            else if (data.type === "STATE_CHANGE") {
               if (data.state === "RUNNING") setAgentStatus("RUNNING");
               else if (data.state === "PAUSED_FOR_HUMAN") setAgentStatus("PAUSED_FOR_HUMAN");
               else if (data.state === "IDLE") setAgentStatus("IDLE");
-            } else if (data.type === "AGENT_STEP") {
+            }
+
+            // 4. Chat Response from Model
+            else if (data.type === "CHAT_RESPONSE" && data.text) {
               setMessages((prev) => {
                 const last = prev[prev.length - 1];
-                const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
                 if (last && last.sender === "agent") {
                   return [
                     ...prev.slice(0, -1),
                     {
                       ...last,
-                      steps: [...(last.steps || []), { text: data.text, time: now }],
+                      text: data.text,
                     },
                   ];
                 }
@@ -144,10 +161,121 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                     sender: "agent",
                     text: data.text,
                     timestamp: now,
-                    steps: [{ text: data.text, time: now }],
+                    steps: [],
                   },
                 ];
               });
+            }
+
+            // 5. Agent Action Telemetry
+            else if (data.type === "ACTION") {
+              const actionSummary = `[${data.action}] ${data.reason || data.selector || data.url || ""}`;
+              setMessages((prev) => {
+                const last = prev[prev.length - 1];
+                const stepObj: MessageStep = { text: actionSummary, action: data.action, time: now };
+                if (last && last.sender === "agent") {
+                  return [
+                    ...prev.slice(0, -1),
+                    {
+                      ...last,
+                      steps: [...(last.steps || []), stepObj],
+                    },
+                  ];
+                }
+                return [
+                  ...prev,
+                  {
+                    id: Math.random().toString(),
+                    sender: "agent",
+                    text: `Executing autonomous action: ${data.action}...`,
+                    timestamp: now,
+                    steps: [stepObj],
+                  },
+                ];
+              });
+            }
+
+            // 6. Navigation Step
+            else if (data.type === "STEP") {
+              const stepSummary = `📍 Step ${data.step}: Navigated to ${data.url} (${data.title || "Page Loaded"})`;
+              setMessages((prev) => {
+                const last = prev[prev.length - 1];
+                const stepObj: MessageStep = { text: stepSummary, time: now };
+                if (last && last.sender === "agent") {
+                  return [
+                    ...prev.slice(0, -1),
+                    {
+                      ...last,
+                      steps: [...(last.steps || []), stepObj],
+                    },
+                  ];
+                }
+                return [
+                  ...prev,
+                  {
+                    id: Math.random().toString(),
+                    sender: "agent",
+                    text: "Exploring web trajectory...",
+                    timestamp: now,
+                    steps: [stepObj],
+                  },
+                ];
+              });
+            }
+
+            // 7. Telemetry Log
+            else if (data.type === "LOG") {
+              const logText = data.message || "";
+              setMessages((prev) => {
+                const last = prev[prev.length - 1];
+                const stepObj: MessageStep = { text: logText, time: now };
+                if (last && last.sender === "agent") {
+                  return [
+                    ...prev.slice(0, -1),
+                    {
+                      ...last,
+                      steps: [...(last.steps || []), stepObj],
+                    },
+                  ];
+                }
+                return prev;
+              });
+            }
+
+            // 8. Task Complete
+            else if (data.type === "COMPLETE") {
+              setAgentStatus("SUCCESS");
+              if (data.reason) {
+                setMessages((prev) => {
+                  const last = prev[prev.length - 1];
+                  const stepObj: MessageStep = { text: `✅ ${data.reason}`, time: now };
+                  if (last && last.sender === "agent") {
+                    return [
+                      ...prev.slice(0, -1),
+                      {
+                        ...last,
+                        steps: [...(last.steps || []), stepObj],
+                      },
+                    ];
+                  }
+                  return prev;
+                });
+              }
+            }
+
+            // 9. SOS Emergency Alert
+            else if (data.type === "SOS_EMERGENCY_ACTIVATED") {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: Math.random().toString(),
+                  sender: "agent",
+                  text: "🚨 Acute Medical Emergency Distress Signal Activated.",
+                  timestamp: now,
+                  emergency: true,
+                  telemetry: data.telemetry,
+                },
+              ]);
             }
           } catch (e) {
             console.error("[WS] Parse error:", e);
@@ -166,6 +294,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
     };
   }, []);
 
+  // Fetch initial tabs from backend
   const refreshTabs = useCallback(async () => {
     try {
       const res = await fetch("/api/tabs");
@@ -185,12 +314,14 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
     refreshTabs();
   }, [refreshTabs]);
 
-  const handleExecute = async (overridePrompt?: string) => {
-    const textToSend = (overridePrompt ?? prompt).trim();
+  // Execute Agent Command
+  const handleExecute = async (queryText: string) => {
+    const textToSend = queryText.trim();
     if (!textToSend) return;
 
     const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+    // Append user message
     const userMsg: ChatMessage = {
       id: Math.random().toString(),
       sender: "user",
@@ -199,8 +330,17 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
     };
 
     setMessages((prev) => [...prev, userMsg]);
-    setPrompt("");
     setAgentStatus("RUNNING");
+
+    // Create placeholder agent message for live streaming
+    const placeholderAgentMsg: ChatMessage = {
+      id: Math.random().toString(),
+      sender: "agent",
+      text: "Analyzing intent and executing autonomous trajectory...",
+      timestamp: timeStr,
+      steps: [{ text: `Initiated goal: "${textToSend}"`, time: timeStr }],
+    };
+    setMessages((prev) => [...prev, placeholderAgentMsg]);
 
     try {
       const res = await fetch("/api/execute", {
@@ -210,20 +350,43 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
       });
 
       const data = await res.json();
-      const isEmergency = data.is_emergency || data.status === "EMERGENCY_DISPATCH_COMPLETE" || textToSend.toLowerCase().includes("heart attack") || textToSend.toLowerCase().includes("emergency");
 
-      const agentMsg: ChatMessage = {
-        id: Math.random().toString(),
-        sender: "agent",
-        text: data.response || data.message || "Task processed successfully.",
-        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        emergency: isEmergency,
-        telemetry: data.telemetry,
-        steps: data.steps?.map((s: string) => ({ text: s, time: timeStr })),
-      };
+      // Format rich response if protocol finished immediately
+      let responseText = data.response || data.reason || data.message || "";
+      if (data.details) {
+        responseText += `\n\n**Protocol Telemetry Details:**\n\`\`\`json\n${JSON.stringify(
+          data.details,
+          null,
+          2
+        )}\n\`\`\``;
+      }
 
-      setMessages((prev) => [...prev, agentMsg]);
-      setAgentStatus("SUCCESS");
+      const isEmergency =
+        data.status === "EMERGENCY_DISPATCH_COMPLETE" ||
+        data.protocol === "SOS_MEDICAL_EMERGENCY" ||
+        textToSend.toLowerCase().includes("heart attack") ||
+        textToSend.toLowerCase().includes("emergency");
+
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last && last.sender === "agent") {
+          return [
+            ...prev.slice(0, -1),
+            {
+              ...last,
+              text: responseText || last.text,
+              emergency: isEmergency,
+              telemetry: data.details || data.telemetry,
+              proofImage: data.proof_image,
+            },
+          ];
+        }
+        return prev;
+      });
+
+      if (data.status === "COMPLETED") {
+        setAgentStatus("SUCCESS");
+      }
       refreshTabs();
     } catch (err: any) {
       console.error("Execution error:", err);
@@ -238,17 +401,54 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
     }
   };
 
+  // If initialPrompt is passed, run it
   useEffect(() => {
     if (initialPrompt && initialPrompt.trim()) {
       handleExecute(initialPrompt.trim());
     }
   }, [initialPrompt]);
 
+  // Upload file to backend
+  const handleFileUpload = async (file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Math.random().toString(),
+          sender: "system",
+          text: `📁 File attached & uploaded: **${file.name}** (${(file.size / 1024).toFixed(1)} KB)${
+            data.processed_size ? ` → Auto-healed: ${data.processed_size}` : ""
+          }`,
+          timestamp: timeStr,
+        },
+      ]);
+    } catch (err: any) {
+      console.error("Upload error:", err);
+    }
+  };
+
+  // If initialFile is passed on mount
+  useEffect(() => {
+    if (initialFile) {
+      handleFileUpload(initialFile);
+    }
+  }, [initialFile]);
+
+  // Reset Session (+ New Chat)
   const handleNewChat = async () => {
     try {
       await fetch("/api/chat/new", { method: "POST" });
     } catch (e) {
-      console.warn("Reset chat backend error:", e);
+      console.warn("Reset chat error:", e);
     }
     setMessages([]);
     setAgentStatus("IDLE");
@@ -257,6 +457,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
     }
   };
 
+  // Stop Agent
   const handleStopAgent = async () => {
     try {
       await fetch("/api/abort", { method: "POST" });
@@ -269,6 +470,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
     }
   };
 
+  // Browser Navigation
   const handleNavigate = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!urlInput.trim()) return;
@@ -284,6 +486,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
     }
   };
 
+  // Multi-tab actions
   const handleOpenTab = async () => {
     try {
       await fetch("/api/tabs/open", {
@@ -324,6 +527,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
     }
   };
 
+  // Canvas Mouse Click Forwarding
   const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
@@ -341,6 +545,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
     );
   };
 
+  // Canvas Mouse Wheel Forwarding
   const handleCanvasWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
@@ -360,36 +565,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
     );
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    try {
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
-      const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Math.random().toString(),
-          sender: "system",
-          text: `📁 File uploaded: ${file.name} (${(file.size / 1024).toFixed(1)} KB)${
-            data.processed_size ? ` → Healed: ${data.processed_size}` : ""
-          }`,
-          timestamp: timeStr,
-        },
-      ]);
-    } catch (err: any) {
-      console.error("Upload error:", err);
-    }
-  };
-
+  // Toggle Voice Recording
   const toggleVoiceRecording = () => {
     if (isRecording) {
       if (recognitionRef.current) {
@@ -419,7 +595,9 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
 
       recognition.onresult = (event: any) => {
         const transcript = event.results[0][0].transcript;
-        setPrompt((prev) => (prev ? `${prev} ${transcript}` : transcript));
+        if (transcript) {
+          handleExecute(transcript);
+        }
       };
 
       recognition.onerror = () => {
@@ -433,22 +611,45 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
       recognitionRef.current = recognition;
       recognition.start();
     } catch (e) {
-      console.error("Speech recognition error:", e);
+      console.error("Speech error:", e);
       setIsRecording(false);
     }
   };
 
   return (
-    <div className="workspace-root">
+    <div className={`workspace-root theme-${currentTheme}`}>
       {/* 1. TOP APP HEADER */}
       <header className="wh-top-header">
         <div className="wh-brand">
           <div className="wh-logo-orb">W</div>
-          <span className="wh-brand-title">warmhole</span>
+          <span className="wh-brand-title">wormhole</span>
           <span className="wh-brand-subtitle">your agentic workspace</span>
         </div>
 
         <div className="wh-top-controls">
+          {/* Theme switcher */}
+          <div className="wh-pills">
+            <button
+              className={`wh-pill-btn ${currentTheme === "purple" ? "active" : ""}`}
+              onClick={() => {
+                setCurrentTheme("purple");
+                setInputMode("text");
+              }}
+            >
+              Galaxy Purple
+            </button>
+            <button
+              className={`wh-pill-btn ${currentTheme === "blue" ? "active" : ""}`}
+              onClick={() => {
+                setCurrentTheme("blue");
+                setInputMode("voice");
+              }}
+            >
+              Electric Blue
+            </button>
+          </div>
+
+          {/* Layout switcher */}
           <div className="wh-layout-group">
             <span className="wh-layout-label">Workspace:</span>
             <div className="wh-pills">
@@ -482,13 +683,20 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
 
       {/* 2. MAIN WORKBENCH SPLIT PANE */}
       <div className={`wh-workbench layout-${layout}`}>
-        {/* LEFT PANE */}
+        {/* LEFT PANE: Chat, Intelligence & Telemetry */}
         <section className="wh-left-pane">
+          {/* Top edge fade flare */}
+          <div className="wh-card-flare-top" />
+
+          {/* Cockpit Header */}
           <div className="wh-cockpit-header">
             <div className="wh-mode-toggle">
               <button
                 className={`wh-mode-btn ${inputMode === "text" ? "active" : ""}`}
-                onClick={() => setInputMode("text")}
+                onClick={() => {
+                  setInputMode("text");
+                  setCurrentTheme("purple");
+                }}
               >
                 + Text
               </button>
@@ -496,6 +704,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                 className={`wh-mode-btn ${inputMode === "voice" ? "active" : ""}`}
                 onClick={() => {
                   setInputMode("voice");
+                  setCurrentTheme("blue");
                   toggleVoiceRecording();
                 }}
               >
@@ -504,7 +713,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
             </div>
 
             <div className="wh-action-btns">
-              <button className="wh-btn-pill wh-btn-pill-cyan" onClick={handleNewChat} title="Start New Chat & Return to Hero">
+              <button className="wh-btn-pill wh-btn-pill-cyan" onClick={handleNewChat} title="Start New Chat & Return to 3D Robot Hero">
                 + New Chat
               </button>
               <button className="wh-btn-pill wh-btn-pill-red" onClick={handleStopAgent} title="Emergency Stop">
@@ -513,26 +722,30 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
             </div>
           </div>
 
-          {/* CHAT FEED CONTAINER */}
+          {/* Chat Feed */}
           <div className="wh-chat-feed" ref={chatScrollRef}>
             {messages.length === 0 ? (
-              <div style={{ padding: "30px 20px", textAlign: "center", color: "var(--wh-muted)" }}>
-                <h4 style={{ color: "#fff", marginBottom: "8px" }}>Wormhole Autonomous Agent Ready</h4>
-                <p style={{ fontSize: "11px", marginBottom: "16px" }}>Type any travel booking, checkout, document healing, or emergency prompt.</p>
+              <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--wh-text-muted)" }}>
+                <h3 style={{ color: "#ffffff", marginBottom: "8px", fontWeight: 700 }}>
+                  Wormhole Agent Ready
+                </h3>
+                <p style={{ fontSize: "12px", marginBottom: "18px" }}>
+                  Ask anything to begin autonomous web navigation, document healing, or emergency triage.
+                </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <button
+                    className="wh-btn-pill wh-btn-pill-cyan"
+                    style={{ justifyContent: "center" }}
+                    onClick={() => handleExecute("browse who is yash2006kr in google and get me his education details")}
+                  >
+                    🔍 Inspect Yashwanth's Portfolio & Details
+                  </button>
                   <button
                     className="wh-btn-pill wh-btn-pill-cyan"
                     style={{ justifyContent: "center" }}
                     onClick={() => handleExecute("Book a sleeper seat on KSRTC from Bangalore to Mysore for tomorrow")}
                   >
                     🚌 Book KSRTC Seat Autonomous
-                  </button>
-                  <button
-                    className="wh-btn-pill wh-btn-pill-cyan"
-                    style={{ justifyContent: "center" }}
-                    onClick={() => handleExecute("Strip dark pattern charges and insurance from checkout cart")}
-                  >
-                    🛒 Anti-Dark-Pattern Fee Stripper
                   </button>
                   <button
                     className="wh-btn-pill wh-btn-pill-red"
@@ -546,20 +759,21 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
             ) : (
               messages.map((m) => (
                 <div key={m.id} className={`wh-msg-card ${m.sender === "user" ? "wh-msg-user" : "wh-msg-agent"}`}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px", fontSize: "10px", color: "var(--wh-muted)" }}>
-                    <span style={{ fontWeight: 700, color: m.sender === "user" ? "var(--wh-purple)" : "var(--wh-cyan)" }}>
-                      {m.sender === "user" ? "YOU" : m.sender === "agent" ? "WORMHOLE COPILOT" : "SYSTEM"}
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", fontSize: "10.5px", color: "var(--wh-text-muted)" }}>
+                    <span style={{ fontWeight: 800, color: m.sender === "user" ? "var(--wh-accent)" : "var(--wh-accent)" }}>
+                      {m.sender === "user" ? "YOU" : "WORMHOLE COPILOT"}
                     </span>
                     <span>{m.timestamp}</span>
                   </div>
 
+                  {/* SOS Emergency Badge */}
                   {m.emergency && (
-                    <div style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "8px", padding: "10px", marginBottom: "10px" }}>
+                    <div style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.45)", borderRadius: "10px", padding: "12px", marginBottom: "12px" }}>
                       <div style={{ color: "#f87171", fontWeight: 800, fontSize: "11px", display: "flex", justifyContent: "space-between" }}>
                         <span>🚨 CODE RED: ACUTE MEDICAL EMERGENCY</span>
                         <span>CPR METRONOME: 110 BPM ♥</span>
                       </div>
-                      <div style={{ fontSize: "11px", marginTop: "6px", color: "#fecaca" }}>
+                      <div style={{ fontSize: "11px", marginTop: "6px", color: "#fecaca", lineHeight: 1.6 }}>
                         • <strong>Ambulance:</strong> KA-05-EM-1108 (ACLS Cardiac) · ETA: <strong>6 Mins</strong><br />
                         • <strong>Hospital:</strong> BGS Gleneagles Hospital ER Bay 02 (Zero-Wait Entry)<br />
                         • <strong>Lead Physician:</strong> Dr. S. Rao, Chief Interventional Cardiologist
@@ -567,18 +781,32 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                     </div>
                   )}
 
-                  <div style={{ whiteSpace: "pre-wrap" }}>{m.text}</div>
+                  {/* Text Message Content */}
+                  <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.text}</div>
 
+                  {/* Proof Image if provided */}
+                  {m.proofImage && (
+                    <div style={{ marginTop: "10px" }}>
+                      <img
+                        src={m.proofImage}
+                        alt="Proof"
+                        style={{ maxWidth: "100%", borderRadius: "8px", border: "1px solid var(--wh-border)" }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Telemetry Logs */}
                   {m.steps && m.steps.length > 0 && (
-                    <div style={{ marginTop: "10px", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "8px" }}>
-                      <div style={{ fontSize: "10px", color: "var(--wh-muted)", marginBottom: "4px", fontWeight: 700 }}>
-                        TELEMETRY EXECUTION LOGS ({m.steps.length})
+                    <div className="wh-telemetry-box">
+                      <div className="wh-telemetry-title">
+                        <span>⚡</span>
+                        <span>TELEMETRY LOGS ({m.steps.length})</span>
                       </div>
                       {m.steps.map((st, i) => (
-                        <div key={i} style={{ fontSize: "10.5px", color: "#94a3b8", display: "flex", gap: "6px", alignItems: "baseline", margin: "2px 0" }}>
-                          <span style={{ color: "var(--wh-cyan)" }}>•</span>
-                          <span style={{ flex: 1 }}>{st.text}</span>
-                          {st.time && <span style={{ fontSize: "9px", color: "#64748b" }}>{st.time}</span>}
+                        <div key={i} className="wh-telemetry-item">
+                          {st.action && <span className="wh-telemetry-action">{st.action}</span>}
+                          <span>{st.text}</span>
+                          {st.time && <span className="wh-telemetry-time">{st.time}</span>}
                         </div>
                       ))}
                     </div>
@@ -590,72 +818,41 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
             {agentStatus === "RUNNING" && (
               <div className="wh-thinking-box">
                 <div className="wh-thinking-spinner" />
-                <span>Wormhole Copilot executing autonomous task on browser...</span>
+                <span>Wormhole Copilot active on real browser session...</span>
               </div>
             )}
           </div>
 
-          {/* BOTTOM BAR */}
+          {/* BOTTOM DOCKED SEARCH BAR */}
           <div className="wh-bottom-bar">
-            <div className="wh-input-container">
-              <input
-                type="file"
-                ref={fileInputRef}
-                style={{ display: "none" }}
-                onChange={handleFileUpload}
-                accept="image/*,.pdf,.doc,.docx"
-              />
-              <button
-                type="button"
-                className="wh-attach-btn"
-                onClick={() => fileInputRef.current?.click()}
-                title="Attach Document or Photo for Healing"
-              >
-                📎
-              </button>
-              <input
-                type="text"
-                className="wh-text-input"
-                placeholder="Ask anything..."
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    handleExecute();
-                  }
-                }}
-              />
-              <button
-                type="button"
-                className={`wh-mic-btn ${isRecording ? "listening" : ""}`}
-                onClick={toggleVoiceRecording}
-                title={isRecording ? "Stop voice listening" : "Speak voice command"}
-              >
-                {isRecording ? "🔴" : "🎙️"}
-              </button>
-              <button
-                type="button"
-                className="wh-run-btn"
-                onClick={() => handleExecute()}
-                disabled={agentStatus === "RUNNING" && !prompt.trim()}
-              >
-                Run ↗
-              </button>
-            </div>
+            {/* The EXACT same glowing pill AISearchBar docked here */}
+            <AISearchBar
+              isDocked={true}
+              theme={currentTheme}
+              isListening={isRecording}
+              onToggleListening={toggleVoiceRecording}
+              onAttachFile={handleFileUpload}
+              onSearch={handleExecute}
+            />
 
             <div className="wh-status-footer">
               <div>
                 Status: <span className={`wh-status-pill ${agentStatus}`}>{agentStatus}</span>
               </div>
-              <div>Click website anytime to pause</div>
+              <div>Click website anytime to pause or interact</div>
             </div>
           </div>
+
+          {/* Bottom edge fade flare */}
+          <div className="wh-card-flare-bottom" />
         </section>
 
-        {/* RIGHT PANE */}
+        {/* RIGHT PANE: Live Browser Viewport & Navigation Bar */}
         <section className="wh-right-pane">
-          {/* TABS BAR */}
+          {/* Top edge fade flare */}
+          <div className="wh-card-flare-top" />
+
+          {/* Browser Tabs */}
           <div className="wh-browser-tabs-bar">
             {tabs.map((tab) => (
               <div
@@ -677,7 +874,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
             </button>
           </div>
 
-          {/* BROWSER TOOLBAR */}
+          {/* Browser Toolbar */}
           <div className="wh-browser-toolbar">
             <div className="wh-traffic-lights">
               <span className="wh-dot wh-dot-red" />
@@ -726,7 +923,7 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
             </button>
           </div>
 
-          {/* SCREENCAST VIEWPORT */}
+          {/* Canvas Screencast Viewport */}
           <div className="wh-canvas-viewport">
             <canvas
               ref={canvasRef}
@@ -742,6 +939,9 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
               </div>
             )}
           </div>
+
+          {/* Bottom edge fade flare */}
+          <div className="wh-card-flare-bottom" />
         </section>
       </div>
     </div>
