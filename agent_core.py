@@ -1,10 +1,11 @@
 """
 ApplyCopilot (Wormhole) Real-Time Agentic Web Engine
 Features:
-- Live CDP Screencast streaming to WebSockets
-- Real website navigation & semantic reasoning via Groq LPU
-- Bidirectional user interaction (clicks, mouse, typing directly on canvas)
-- Instant Human-in-the-Loop Interrupt Gate (pauses on user click or CAPTCHA/Login)
+- Live CDP Screencast streaming to WebSockets with Wheel Scrolling & Mouse Movement
+- DOM-Aware Autonomous Reasoning via Groq LPU (openai/gpt-oss-20b)
+- Multi-Input Form Filling (fill_form action for instant contact/job form submission)
+- Document Context Ingestion (extracts text from attached PDFs and credentials from vault)
+- Instant Human-in-the-Loop Interrupt Gate & Emergency Abort
 """
 
 import os
@@ -35,9 +36,11 @@ class AgentCore:
         self.page = None
         self.cdp = None
         
-        # State: IDLE, RUNNING, INTERRUPTED, PAUSED_FOR_HUMAN
+        # State: IDLE, RUNNING, INTERRUPTED, MANUAL_CONTROL, PAUSED_FOR_HUMAN
         self.state = "IDLE"
         self.current_goal = None
+        self.current_context = ""
+        self.attached_files = []
         self.interrupt_event = asyncio.Event()
         self.resume_event = asyncio.Event()
         self.interrupt_resolution = None # "RESUME", "REPLAN", "HANDOVER"
@@ -46,7 +49,6 @@ class AgentCore:
         self.active_websockets = set()
         self.execution_task = None
         self.action_history = []
-        self.attached_files = []
         self.viewport_size = {"width": 1280, "height": 800}
 
     async def initialize(self):
@@ -110,7 +112,7 @@ class AgentCore:
                     except Exception:
                         disconnected.add(ws)
                 self.active_websockets -= disconnected
-        except Exception as e:
+        except Exception:
             pass
 
     async def broadcast(self, msg_dict):
@@ -125,16 +127,12 @@ class AgentCore:
         self.active_websockets -= disconnected
 
     # --------------------------------------------------------------------------
-    # BIDIRECTIONAL USER INTERACTION
+    # BIDIRECTIONAL USER INTERACTION (CLICKS, WHEEL, KEYBOARD)
     # --------------------------------------------------------------------------
     async def handle_user_canvas_click(self, x_ratio, y_ratio):
-        """
-        Receives normalized (0.0 to 1.0) coordinates from client's canvas click.
-        """
+        """Receives normalized (0.0 to 1.0) coordinates from client canvas click."""
         actual_x = int(x_ratio * self.viewport_size["width"])
         actual_y = int(y_ratio * self.viewport_size["height"])
-
-        print(f"[USER INTERACTION] Click at ({actual_x}, {actual_y}) | Current State: {self.state}")
 
         # If agent is RUNNING -> Trigger Instant Interrupt!
         if self.state == "RUNNING":
@@ -142,9 +140,17 @@ class AgentCore:
             await self.trigger_user_interrupt(actual_x, actual_y)
             return
 
-        # If IDLE or MANUAL_CONTROL -> forward click directly to real web page
+        # If IDLE or MANUAL_CONTROL -> forward click with mouseMoved first
         if self.cdp:
             try:
+                # 1. Dispatch mouseMoved to trigger hover / active states
+                await self.cdp.send("Input.dispatchMouseEvent", {
+                    "type": "mouseMoved",
+                    "x": actual_x,
+                    "y": actual_y
+                })
+                await asyncio.sleep(0.02)
+                # 2. Press
                 await self.cdp.send("Input.dispatchMouseEvent", {
                     "type": "mousePressed",
                     "x": actual_x,
@@ -152,7 +158,8 @@ class AgentCore:
                     "button": "left",
                     "clickCount": 1
                 })
-                await asyncio.sleep(0.05)
+                await asyncio.sleep(0.04)
+                # 3. Release
                 await self.cdp.send("Input.dispatchMouseEvent", {
                     "type": "mouseReleased",
                     "x": actual_x,
@@ -160,16 +167,28 @@ class AgentCore:
                     "button": "left",
                     "clickCount": 1
                 })
-                await self.broadcast({
-                    "type": "LOG",
-                    "message": f"User manual click forwarded to DOM at ({actual_x}, {actual_y})."
-                })
             except Exception as e:
                 print(f"[!] Error forwarding click: {e}")
 
+    async def handle_user_canvas_wheel(self, x_ratio, y_ratio, delta_x, delta_y):
+        """Forwards mouse wheel scrolling to real browser session."""
+        actual_x = int(x_ratio * self.viewport_size["width"])
+        actual_y = int(y_ratio * self.viewport_size["height"])
+        if self.cdp:
+            try:
+                await self.cdp.send("Input.dispatchMouseEvent", {
+                    "type": "mouseWheel",
+                    "x": actual_x,
+                    "y": actual_y,
+                    "deltaX": int(delta_x),
+                    "deltaY": int(delta_y)
+                })
+            except Exception:
+                pass
+
     async def handle_user_canvas_key(self, key, text=None):
         """Forwards keyboard strokes to the real page during manual takeover (login, OTP, CAPTCHA)."""
-        if not self.page or self.state not in ["MANUAL_CONTROL", "IDLE"]:
+        if not self.page:
             return
 
         try:
@@ -187,21 +206,6 @@ class AgentCore:
                 await self.page.keyboard.press(key)
         except Exception as e:
             print(f"[!] Error forwarding keystroke: {e}")
-
-    async def direct_goto(self, url):
-        """Direct navigation invoked by user entering URL in browser bar."""
-        await self.initialize()
-        if self.page:
-            try:
-                print(f"[DIRECT NAV] Navigating to: {url}")
-                await self.page.goto(url, wait_until="domcontentloaded", timeout=20000)
-                await self.broadcast({
-                    "type": "URL_UPDATE",
-                    "url": self.page.url,
-                    "title": await self.page.title()
-                })
-            except Exception as e:
-                print(f"[!] Direct goto error: {e}")
 
     async def trigger_user_interrupt(self, x=None, y=None):
         """Puts agent into INTERRUPTED state and notifies frontend."""
@@ -229,10 +233,7 @@ class AgentCore:
         })
 
     async def resolve_interrupt(self, action, new_prompt=None):
-        """
-        Resolves the user's decision from the interrupt modal:
-        action in ['RESUME', 'REPLAN', 'HANDOVER']
-        """
+        """Resolves user decision from interrupt modal: ['RESUME', 'REPLAN', 'HANDOVER']."""
         print(f"[INTERRUPT RESOLUTION] User chose: {action}")
         self.interrupt_resolution = action
         self.new_instruction = new_prompt
@@ -243,7 +244,7 @@ class AgentCore:
             self.resume_event.set()
             await self.broadcast({
                 "type": "LOG",
-                "message": "Resuming autonomous trajectory (accidental click dismissed)."
+                "message": "Resuming autonomous trajectory."
             })
 
         elif action == "REPLAN":
@@ -260,7 +261,7 @@ class AgentCore:
             self.state = "MANUAL_CONTROL"
             await self.broadcast({
                 "type": "LOG",
-                "message": "Manual handover active. You can now click and log in / solve CAPTCHA directly on canvas."
+                "message": "Interactive mode active. Full mouse, scroll & keyboard control granted."
             })
 
     async def resume_from_manual_handover(self):
@@ -270,16 +271,97 @@ class AgentCore:
         self.resume_event.set()
         await self.broadcast({
             "type": "LOG",
-            "message": "Human verification complete! Agent resuming autonomous flow."
+            "message": "Resuming autonomous trajectory after manual interaction."
         })
+
+    async def abort_current_task(self):
+        """Emergency stop: kills current execution loop immediately."""
+        print("[AGENT CORE] Immediate emergency abort triggered.")
+        self.state = "IDLE"
+        self.interrupt_event.clear()
+        self.resume_event.set()
+        if self.execution_task and not self.execution_task.done():
+            self.execution_task.cancel()
+        await self.broadcast({
+            "type": "COMPLETE",
+            "reason": "Agent stopped by user command.",
+            "state": "IDLE"
+        })
+
+    async def direct_goto(self, url):
+        """Direct navigation invoked by user entering URL in browser bar."""
+        await self.initialize()
+        if self.page:
+            try:
+                print(f"[DIRECT NAV] Navigating to: {url}")
+                await self.page.goto(url, wait_until="domcontentloaded", timeout=20000)
+                await self.broadcast({
+                    "type": "URL_UPDATE",
+                    "url": self.page.url,
+                    "title": await self.page.title()
+                })
+            except Exception as e:
+                print(f"[!] Direct goto error: {e}")
+
+    # --------------------------------------------------------------------------
+    # DOM INSPECTOR: EXTRACTS VISIBLE INTERACTIVE ELEMENTS
+    # --------------------------------------------------------------------------
+    async def _get_interactive_dom_elements(self):
+        """Extracts visible inputs, textareas, buttons, and links to give Groq eyes on the page."""
+        if not self.page:
+            return ""
+        try:
+            script = """
+            (() => {
+                const results = [];
+                const isVisible = (el) => {
+                    return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+                };
+
+                // 1. Inputs and Textareas
+                document.querySelectorAll('input:not([type="hidden"]), textarea, select').forEach(el => {
+                    const id = el.id ? '#' + el.id : '';
+                    const name = el.name ? '[name="' + el.name + '"]' : '';
+                    const type = el.type ? '[type="' + el.type + '"]' : '';
+                    const placeholder = el.placeholder ? 'placeholder="' + el.placeholder.slice(0, 35) + '"' : '';
+                    const vis = isVisible(el) ? 'visible' : 'hidden';
+                    results.push(`INPUT: ${el.tagName.toLowerCase()}${id}${name}${type} ${placeholder} [${vis}]`.trim());
+                });
+
+                // 2. Buttons
+                document.querySelectorAll('button, input[type="submit"], [role="button"]').forEach(el => {
+                    const id = el.id ? '#' + el.id : '';
+                    const text = (el.innerText || el.value || '').trim().slice(0, 40);
+                    const vis = isVisible(el) ? 'visible' : 'hidden';
+                    if (text || id) {
+                        results.push(`BUTTON: ${el.tagName.toLowerCase()}${id} text="${text}" [${vis}]`.trim());
+                    }
+                });
+
+                // 3. Prominent Links / Anchors
+                document.querySelectorAll('a').forEach((el, idx) => {
+                    const text = (el.innerText || '').trim().slice(0, 35);
+                    const href = el.getAttribute('href') || '';
+                    if (text && (href.startsWith('#') || href.includes('connect') || href.includes('contact') || idx < 12)) {
+                        results.push(`LINK: a[href="${href}"] text="${text}"`.trim());
+                    }
+                });
+                return results.slice(0, 30).join("\\n");
+            })()
+            """
+            return await self.page.evaluate(script)
+        except Exception as e:
+            print(f"[!] DOM extraction error: {e}")
+            return ""
 
     # --------------------------------------------------------------------------
     # AUTONOMOUS AGENTIC EXECUTION LOOP
     # --------------------------------------------------------------------------
-    async def start_autonomous_task(self, goal):
+    async def start_autonomous_task(self, goal, context=""):
         """Starts executing a natural language goal on the live web."""
         await self.initialize()
         self.current_goal = goal
+        self.current_context = context
         self.state = "RUNNING"
         self.action_history = []
         self.interrupt_event.clear()
@@ -301,7 +383,7 @@ class AgentCore:
         return None
 
     async def _run_loop(self):
-        """Main agentic reasoning & execution loop."""
+        """Main agentic reasoning & execution loop with DOM awareness."""
         try:
             print(f"\n[AGENTIC LOOP START] Goal: \"{self.current_goal}\"")
             await self.broadcast({"type": "TASK_START", "goal": self.current_goal})
@@ -342,8 +424,13 @@ class AgentCore:
                     })
                     await self.resume_event.wait()
 
+                # Extract live interactive DOM elements
+                dom_elements = await self._get_interactive_dom_elements()
+
                 # Ask Groq LPU for next action
-                action = await self._decide_next_action(self.current_goal, curr_url, curr_title)
+                action = await self._decide_next_action(
+                    self.current_goal, curr_url, curr_title, dom_elements, self.current_context
+                )
                 action_type = action.get("action", "wait").lower()
                 selector = action.get("selector", "")
                 text_val = action.get("text", "")
@@ -357,7 +444,7 @@ class AgentCore:
                     "reason": reason
                 })
 
-                # Execute the action on the live page
+                # Execute action on the live page
                 try:
                     if action_type == "navigate":
                         url_cand = (action.get("url") or action.get("text") or action.get("selector") or "").strip()
@@ -372,30 +459,85 @@ class AgentCore:
                         # If already at destination
                         if target_url.rstrip("/") in curr_url.rstrip("/") and len(curr_url) > 10:
                             print(f"  -> Arrived at target: {curr_url}")
-                            await self.broadcast({"type": "COMPLETE", "reason": f"Successfully loaded {curr_url}"})
-                            break
+                        else:
+                            print(f"  -> Navigating to: {target_url}")
+                            await self.page.goto(target_url, wait_until="domcontentloaded", timeout=20000)
+                            await asyncio.sleep(1.5)
 
-                        print(f"  -> Navigating to: {target_url}")
-                        await self.page.goto(target_url, wait_until="domcontentloaded", timeout=20000)
-                        await asyncio.sleep(1.5)
+                    elif action_type == "fill_form":
+                        fields = action.get("fields", {})
+
+                        # Check if any field is not visible and page has a #connect or #contact link to activate the section
+                        first_sel = next(iter(fields.keys()), "")
+                        if first_sel:
+                            try:
+                                is_vis = await self.page.locator(first_sel).first.is_visible()
+                                if not is_vis:
+                                    print(f"  -> Field '{first_sel}' not visible. Checking for section link...")
+                                    for nav_sel in ["a[href='#connect']", "a[href='#contact']", "a[data-page='connect']", "text=Initiate Contact", "text=Connect"]:
+                                        if await self.page.locator(nav_sel).count() > 0:
+                                            print(f"  -> Clicking section link: {nav_sel}")
+                                            await self.page.locator(nav_sel).first.click()
+                                            await asyncio.sleep(1.0)
+                                            break
+                            except Exception:
+                                pass
+
+                        for f_sel, f_val in fields.items():
+                            try:
+                                print(f"  -> Filling field '{f_sel}' with: {str(f_val)[:35]}...")
+                                loc = self.page.locator(f_sel).first
+                                await loc.scroll_into_view_if_needed(timeout=3000)
+                                await loc.fill(str(f_val), timeout=4000)
+                                await asyncio.sleep(0.3)
+                            except Exception as fe:
+                                print(f"  [!] Fill error on {f_sel}: {fe}")
+
+                        submit_sel = action.get("submit_selector")
+                        if submit_sel:
+                            try:
+                                clean_sel = submit_sel
+                                if "text=" in clean_sel and not clean_sel.startswith("text="):
+                                    txt_part = clean_sel.split("text=")[1].strip(" :\"'").replace('"', '')
+                                    clean_sel = f'button:has-text("{txt_part}"), button[type="submit"], input[type="submit"]'
+                                print(f"  -> Clicking form submit: {clean_sel}")
+                                btn_loc = self.page.locator(clean_sel).first
+                                await btn_loc.scroll_into_view_if_needed(timeout=3000)
+                                await btn_loc.click(timeout=5000)
+                                await asyncio.sleep(1.5)
+                            except Exception as se:
+                                print(f"  [!] Submit click error: {se}")
+
+                        if action.get("finish_after", True):
+                            print(f"  -> Form Complete: {reason}")
+                            await self.broadcast({"type": "COMPLETE", "reason": reason})
+                            break
 
                     elif action_type == "type":
                         target_selector = selector or "input, textarea"
                         print(f"  -> Typing '{text_val}' into: {target_selector}")
-                        await self.page.fill(target_selector, text_val, timeout=5000)
+                        loc = self.page.locator(target_selector).first
+                        await loc.scroll_into_view_if_needed(timeout=3000)
+                        await loc.fill(text_val, timeout=5000)
                         if action.get("press_enter"):
-                            await self.page.press(target_selector, "Enter")
+                            await loc.press("Enter")
                         await asyncio.sleep(1)
 
                     elif action_type == "click":
-                        target_selector = selector or text_val
-                        print(f"  -> Clicking element: {target_selector}")
-                        await self.page.click(target_selector, timeout=5000)
+                        raw_sel = selector or text_val
+                        clean_sel = raw_sel
+                        if "text=" in clean_sel and not clean_sel.startswith("text="):
+                            txt_part = clean_sel.split("text=")[1].strip(" :\"'").replace('"', '')
+                            clean_sel = f'button:has-text("{txt_part}"), a:has-text("{txt_part}")'
+                        print(f"  -> Clicking element: {clean_sel}")
+                        loc = self.page.locator(clean_sel).first
+                        await loc.scroll_into_view_if_needed(timeout=3000)
+                        await loc.click(timeout=5000)
                         await asyncio.sleep(1.5)
 
                     elif action_type == "scroll":
                         print("  -> Scrolling down page...")
-                        await self.page.evaluate("window.scrollBy(0, 500)")
+                        await self.page.evaluate("window.scrollBy(0, 600)")
                         await asyncio.sleep(0.5)
 
                     elif action_type == "finish":
@@ -405,7 +547,7 @@ class AgentCore:
 
                 except Exception as e:
                     print(f"  [!] Action execution error on '{selector}': {e}")
-                    await self.broadcast({"type": "LOG", "message": f"Action error: {e}"})
+                    await self.broadcast({"type": "LOG", "message": f"Action notice: {e}"})
                     await asyncio.sleep(1)
 
                 # Check if user clicked during execution
@@ -416,38 +558,45 @@ class AgentCore:
 
             self.state = "IDLE"
             await self.broadcast({"type": "STATE_CHANGE", "state": "IDLE"})
+        except asyncio.CancelledError:
+            print("[AGENT LOOP] Task cancelled by user abort.")
+            self.state = "IDLE"
         except Exception as e:
             print(f"[AGENT LOOP FATAL] Error: {e}")
-            import traceback
-            traceback.print_exc()
             self.state = "IDLE"
 
-    async def _decide_next_action(self, goal, curr_url, curr_title):
-        """Queries Groq LPU to determine the next browser action."""
-        # Fast rule-based heuristics for speed & reliability
-        if "google.com" in curr_url or "bing.com" in curr_url:
-            if "search" in goal.lower():
-                return {
-                    "action": "type",
-                    "selector": "textarea[name='q'], input[name='q']",
-                    "text": goal.replace("search", "").strip(),
-                    "press_enter": True,
-                    "reason": "Typing search query into Google."
-                }
+    async def _decide_next_action(self, goal, curr_url, curr_title, dom_elements="", context_info=""):
+        """Queries Groq LPU with DOM context and user document credentials."""
+        # Fast rule-based heuristics for search engines
+        if ("google.com" in curr_url or "bing.com" in curr_url) and "search" in goal.lower():
+            return {
+                "action": "type",
+                "selector": "textarea[name='q'], input[name='q']",
+                "text": goal.replace("search", "").strip(),
+                "press_enter": True,
+                "reason": "Typing search query into Google."
+            }
 
-        # Otherwise query Groq LPU
         sys_prompt = (
             "You are an autonomous web agent executing actions on real websites.\n"
-            "Given the user's goal, current URL, and page title, return the NEXT single action in valid JSON.\n"
-            "Action options:\n"
-            "- navigate: set 'text' to full URL (e.g. {\"action\": \"navigate\", \"text\": \"https://news.ycombinator.com\", \"reason\": \"Open HN\"})\n"
-            "- click: set 'selector' to CSS or text selector (e.g. {\"action\": \"click\", \"selector\": \"text=Show HN\", \"reason\": \"Filter articles\"})\n"
-            "- type: set 'selector' to input, 'text' to string, optional 'press_enter': true\n"
-            "- scroll: {\"action\": \"scroll\", \"reason\": \"Browse content\"}\n"
-            "- finish: when goal has been achieved or user is at destination\n"
-            "JSON Format: {\"action\": \"...\", \"selector\": \"...\", \"text\": \"...\", \"reason\": \"...\", \"press_enter\": false}"
+            "Given the user's goal, user/document credentials, current URL, page title, and interactive DOM elements, decide the next action in JSON.\n\n"
+            "Supported Action Types:\n"
+            "1. fill_form: Use when contact forms, inquiry forms, or inputs exist on page.\n"
+            "   Format: {\"action\": \"fill_form\", \"fields\": {\"css_or_id\": \"value_to_fill\", ...}, \"submit_selector\": \"button_css_or_text\", \"finish_after\": true, \"reason\": \"...\"}\n"
+            "2. navigate: {\"action\": \"navigate\", \"text\": \"https://...\", \"reason\": \"...\"}\n"
+            "3. click: {\"action\": \"click\", \"selector\": \"css_selector or text=ExactText\", \"reason\": \"...\"}\n"
+            "4. type: {\"action\": \"type\", \"selector\": \"input_selector\", \"text\": \"string\", \"press_enter\": false, \"reason\": \"...\"}\n"
+            "5. scroll: {\"action\": \"scroll\", \"reason\": \"Scroll down to find form or content\"}\n"
+            "6. finish: {\"action\": \"finish\", \"reason\": \"Task completed successfully\"}\n\n"
+            "Always prefer fill_form when submitting forms. Ensure selectors match the visible DOM elements provided."
         )
-        user_msg = f"Goal: {goal}\nCurrent URL: {curr_url}\nCurrent Page Title: {curr_title}"
+
+        user_msg = (
+            f"User Goal: {goal}\n\n"
+            f"Attached Document / Candidate Data:\n{context_info}\n\n"
+            f"Current Web Page: {curr_url} ('{curr_title}')\n\n"
+            f"Visible Interactive DOM Elements:\n{dom_elements}\n"
+        )
 
         try:
             res = groq_client.chat.completions.create(
@@ -462,12 +611,6 @@ class AgentCore:
             return json.loads(res.choices[0].message.content)
         except Exception as e:
             print(f"[!] Groq decision error: {e}")
-            if curr_url == "https://en.wikipedia.org":
-                return {
-                    "action": "navigate",
-                    "text": "https://news.ycombinator.com",
-                    "reason": "Navigating to tech portal."
-                }
             return {"action": "finish", "reason": "Completed trajectory."}
 
 # Global Singleton Instance
