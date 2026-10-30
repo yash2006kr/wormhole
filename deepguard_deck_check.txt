@@ -1,0 +1,189 @@
+
+================ SLIDE 1 ================
+Pictures (4):
+  Pic: Picture 4, left=0.00in, top=0.00in, w=13.42in, h=7.58in
+  Pic: Picture 9, left=0.46in, top=0.00in, w=3.22in, h=1.13in
+  Pic: Picture 12, left=10.60in, top=0.13in, w=2.47in, h=0.83in
+  Pic: Picture 20, left=3.33in, top=0.30in, w=6.67in, h=2.31in
+Text shapes (3):
+  [Txt]: run_sizes=[] | 'PROBLEM STATEMENT 04: TRUST & SAFETY · MEDIA FORENSICS'
+  [Txt]: run_sizes=[] | 'DEEPGUARD'
+  [Txt]: run_sizes=[] | 'Deepfake Detection & Viral Takedown Tracker'
+  [Txt]: run_sizes=[] | '"Detect manipulated media. Trace viral spread. Automate takedowns befo'
+  [Txt]: run_sizes=[] | 'TEAM DETAILS'
+  [Txt]: run_sizes=[] | 'Team Name: Sentinel AI'
+  [Txt]: run_sizes=[] | 'Domain: Trust & Safety · Media Forensics · Content Provenance'
+  [Txt]: run_sizes=[] | 'TEAM MEMBERS'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Yashwanth KR — Team Lead / ML Forensics Architect'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Team Member 2 — Audio-Visual Biometrics & Anomaly Engine'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Team Member 3 — Perceptual Hashing & Viral Propagation Graph'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Team Member 4 — Takedown Orchestrator & Investigator UI'
+
+================ SLIDE 2 ================
+Pictures (3):
+  Pic: Picture 15, left=0.11in, top=6.90in, w=1.27in, h=0.45in
+  Pic: Picture 8, left=5.74in, top=0.11in, w=1.85in, h=0.26in
+  Pic: Picture 22, left=4.48in, top=1.38in, w=4.34in, h=2.59in
+Text shapes (13):
+  [Txt]: run_sizes=[18.0] | '2/7'
+  [Txt]: run_sizes=[] | 'Problem Statement & Its Relevance'
+  [Txt]: run_sizes=[14.0, 14.0] | 'Deepfakes Move Faster Than Human Triage.  A single manipulated clip re'
+  [Txt]: run_sizes=[] | '🎯 EXACT PROBLEM'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Unchecked Synthetic Media: Generative AI creates photorealistic vide'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Viral Re-upload Velocity: A single fake is downloaded, cropped, re-e'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Takedown Asymmetry: Victims face a slow, manual 72-hour reporting or'
+  [Txt]: run_sizes=[] | '❗ WHY DOES THIS MATTER?'
+  [Txt]: run_sizes=[14.0, 14.0] | '• 550% Surge in Deepfakes: Over 500,000 synthetic media incidents repo'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Irreversible Harm: Once viral, 80% of viewers retain false impressio'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Slow Manual Takedown: Standard DMCA takes 2–5 days; DeepGuard target'
+  [Txt]: run_sizes=[] | 'ILLUSTRATIVE SCENARIO: VIRAL DEEPFAKE ATTACK'
+  [Txt]: run_sizes=[14.0, 14.0, 14.0, 14.0, 14.0] | '① Fake Generated ➔ ② Seeded on Socials ➔ ③ Mirrored ➔ ④ Viral Defamati'
+  [Txt]: run_sizes=[] | 'Without automated perceptual hashing and cross-platform tracking, copi'
+  [Txt]: run_sizes=[] | '👥 WHO FACES THIS PROBLEM?'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Public Figures & Leaders: Defamation, synthetic election interferenc'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Private Citizens & Youth: Identity theft, cyberbullying, and non-con'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Newsrooms & Fact-Checkers: Inability to authenticate fast-breaking u'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Platform Moderation Teams: Overwhelmed by millions of uploads requir'
+  [Txt]: run_sizes=[] | '💡 CORE PROBLEM STATEMENT'
+  [Txt]: run_sizes=[] | '"How might we automatically detect manipulated media with explainable '
+
+================ SLIDE 3 ================
+Pictures (3):
+  Pic: Picture 8, left=0.11in, top=6.90in, w=1.27in, h=0.45in
+  Pic: Picture 9, left=5.74in, top=0.11in, w=1.85in, h=0.26in
+  Pic: Picture 14, left=5.43in, top=1.38in, w=7.22in, h=2.39in
+Text shapes (13):
+  [Txt]: run_sizes=[18.0] | '3/7'
+  [Txt]: run_sizes=[] | 'Proposed Solution & Innovation'
+  [Txt]: run_sizes=[14.0, 14.0] | 'DEEPGUARD – Multi-Modal Media Forensics & Automated Viral Takedown Pla'
+  [Txt]: run_sizes=[] | '🎯 WHAT ARE WE PROPOSING?'
+  [Txt]: run_sizes=[14.0, 14.0] | '• DEEPGUARD is an end-to-end platform that ingests suspect video/audio'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Multi-Modal Detection: Inspects facial blending boundaries, eye-blin'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Viral Spread Mapping: Uses perceptual hashes (pHash) to detect crops'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Actionable Takedown Engine: Generates court-ready C2PA dossiers and '
+  [Txt]: run_sizes=[] | '1. Multi-Modal Forensic Fusion'
+  [Txt]: run_sizes=[] | 'Combines EfficientNet-B4 spatial anomaly detection, WavLM audio spectr'
+  [Txt]: run_sizes=[] | '2. Perceptual Hash Spread Graph'
+  [Txt]: run_sizes=[] | 'Generates robust perceptual fingerprints (pHash) and visual embeddings'
+  [Txt]: run_sizes=[] | '3. Explainable Legal Takedown API'
+  [Txt]: run_sizes=[] | 'Generates C2PA-compliant cryptographic proof dossiers and dispatches a'
+  [Txt]: run_sizes=[] | '⚡ SOLUTION WORKFLOW PIPELINE'
+  [Txt]: run_sizes=[14.0, 14.0, 14.0, 14.0, 14.0, 14.0, 14.0] | '[1] Media Ingestion ➔ [2] Multi-Modal Forensics ➔ [3] Artifact Heatmap'
+  [Txt]: run_sizes=[] | 'From upload to automated DMCA platform filing and verifiable legal evi'
+
+================ SLIDE 4 ================
+Pictures (5):
+  Pic: Picture 11, left=0.11in, top=6.90in, w=1.27in, h=0.45in
+  Pic: Picture 6, left=5.74in, top=0.11in, w=1.85in, h=0.26in
+  Pic: Picture 15, left=0.80in, top=1.85in, w=1.40in, h=0.95in
+  Pic: Picture 17, left=0.80in, top=2.95in, w=1.40in, h=0.95in
+  Pic: Picture 19, left=0.80in, top=4.05in, w=1.40in, h=0.95in
+Text shapes (13):
+  [Txt]: run_sizes=[18.0] | '4/7'
+  [Txt]: run_sizes=[] | 'Existing Solutions & Differentiation'
+  [Txt]: run_sizes=[14.0, 14.0] | 'From Isolated Dashboards to an Integrated, Automated Takedown Ecosyste'
+  [Txt]: run_sizes=[] | 'EXISTING SOLUTIONS & LIMITATIONS'
+  [Txt]: run_sizes=[] | 'Generic Online Detectors'
+  [Txt]: run_sizes=[] | '• Binary score without explainable heatmaps.• High false-positive rat'
+  [Txt]: run_sizes=[] | 'Platform Content-ID'
+  [Txt]: run_sizes=[] | '• Exact hash match (MD5/SHA256) easily bypassed.• Fails on cropping, '
+  [Txt]: run_sizes=[] | 'Manual DMCA Filing Forms'
+  [Txt]: run_sizes=[] | '• Tedious forms taking 48–72 hours per platform.• Copies keep reappea'
+  [Txt]: run_sizes=[] | 'VS'
+  [Txt]: run_sizes=[] | 'OUR SOLUTION: DEEPGUARD ADVANTAGES'
+  [Txt]: run_sizes=[14.0, 14.0] | '✔ Multi-Modal Scope: Analyzes video frames, audio tracks, and EXIF met'
+  [Txt]: run_sizes=[14.0, 14.0] | '✔ Bypass-Resistant Fingerprinting: Perceptual hashing (pHash) and visu'
+  [Txt]: run_sizes=[14.0, 14.0] | '✔ Viral Spread Mapping: Constructs a directed propagation DAG identify'
+  [Txt]: run_sizes=[14.0, 14.0] | '✔ Automated Legal Takedown: Generates pre-filled DMCA notices and plat'
+  [Txt]: run_sizes=[14.0, 14.0] | '✔ Full Explainability & Dossier: Provides Grad-CAM visual heatmaps, pe'
+  [Txt]: run_sizes=[] | '🏆 KEY COMPETITIVE ADVANTAGE'
+  [Txt]: run_sizes=[] | 'Judges and investigators can inject a newly manipulated video, observe'
+
+================ SLIDE 5 ================
+Pictures (2):
+  Pic: Picture 8, left=0.11in, top=6.90in, w=1.27in, h=0.45in
+  Pic: Picture 9, left=5.74in, top=0.11in, w=1.85in, h=0.26in
+Text shapes (10):
+  [Txt]: run_sizes=[18.0] | '5/7'
+  [Txt]: run_sizes=[] | 'Technical Approach & Feasibility'
+  [Txt]: run_sizes=[14.0, 14.0] | 'A Working Forensic & Takedown Engine, Not Just a Visual Demo.  Full-st'
+  [Txt]: run_sizes=[] | '🏗 SYSTEM ARCHITECTURE & DATA FLOW'
+  [Txt]: run_sizes=[14.0, 14.0] | '• 1. Ingestion & Pre-processing: FastAPI asynchronous workers split me'
+  [Txt]: run_sizes=[14.0, 14.0] | '• 2. Multi-Modal Forensic Engine: PyTorch / ONNX models run in paralle'
+  [Txt]: run_sizes=[14.0, 14.0] | '• 3. Perceptual Search & Graph Layer: ImageHash computes pHash fingerp'
+  [Txt]: run_sizes=[14.0, 14.0] | '• 4. Takedown & Provenance Service: Generates standardized DMCA notice'
+  [Txt]: run_sizes=[14.0, 14.0] | '• 5. Investigator UI: React.js + D3.js dashboard renders the live spre'
+  [Txt]: run_sizes=[] | '🛠 TECHNOLOGIES USED'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Frontend: React.js, Tailwind CSS, D3.js, Canvas'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Backend API: Python 3.12, FastAPI, Celery, Redis'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Forensic ML: PyTorch, EfficientNet-B4, WavLM, OpenCV'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Search & Graph: Milvus Vector DB, NetworkX, pHash'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Storage & Cloud: AWS S3, SQLite, Docker, C2PA Standard'
+  [Txt]: run_sizes=[] | '🤖 WHERE IS AI NEEDED?'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Subtle Artifact Detection: Deep neural nets are required to detect s'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Perceptual Invariance: Embeddings match cropped, compressed, or spee'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Deterministic Safeguards: Takedown filing and provenance validation '
+  [Txt]: run_sizes=[] | '🎯 HACKATHON MVP (FEASIBLE SCOPE)'
+  [Txt]: run_sizes=[14.0, 14.0] | '✔ Working Ingestion: Direct video/audio file upload & URL parser.'
+  [Txt]: run_sizes=[14.0, 14.0] | '✔ Multi-Modal Scoring: Frame-by-frame heatmap & overall confidence.'
+  [Txt]: run_sizes=[14.0, 14.0] | '✔ Variant Matching: Instant matching of cropped / filtered re-uploads.'
+  [Txt]: run_sizes=[14.0, 14.0] | '✔ Spread DAG: D3.js tree showing simulated viral spread across 3 netwo'
+  [Txt]: run_sizes=[14.0, 14.0] | '✔ Automated DMCA: Pre-filled legal takedown notice + C2PA report.'
+
+================ SLIDE 6 ================
+Pictures (2):
+  Pic: Picture 8, left=0.11in, top=6.90in, w=1.27in, h=0.45in
+  Pic: Picture 9, left=5.74in, top=0.11in, w=1.85in, h=0.26in
+Text shapes (12):
+  [Txt]: run_sizes=[18.0] | '6/7'
+  [Txt]: run_sizes=[] | 'Expected Impact & Execution Plan'
+  [Txt]: run_sizes=[14.0, 14.0] | 'Measure the Speed. Stop the Virality. Protect Victims at Scale.  Quant'
+  [Txt]: run_sizes=[] | '📈 EXPECTED IMPACT'
+  [Txt]: run_sizes=[14.0, 14.0] | '• 95% Takedown Acceleration: Reduces reporting-to-filing latency from '
+  [Txt]: run_sizes=[14.0, 14.0] | '• Halts Cross-Platform Virality: Flags derivative mirrors before they '
+  [Txt]: run_sizes=[14.0, 14.0] | '• Victim Legal Empowerment: 1-click generation of court-ready forensic'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Scalable Cloud Design: Stateless worker pool handles 10,000+ daily v'
+  [Txt]: run_sizes=[] | '🎯 KEY EVALUATION TARGETS'
+  [Txt]: run_sizes=[14.0, 14.0] | '✔ >92% Detection F1-Score: Benchmarked on FaceForensics++ & DFDC datas'
+  [Txt]: run_sizes=[14.0, 14.0] | '✔ <15 Min Takedown Time: Automated DMCA vs. 3-day manual industry base'
+  [Txt]: run_sizes=[14.0, 14.0] | '✔ >88% Variant Recall: Detects cropped, compressed, and filtered re-up'
+  [Txt]: run_sizes=[14.0, 14.0] | '✔ <3% False Positive Rate: Validated on authentic archival & broadcast'
+  [Txt]: run_sizes=[14.0, 14.0] | '✔ <45s Processing Latency: Full multi-modal analysis per 60-second HD '
+  [Txt]: run_sizes=[14.0, 14.0] | '✔ 1-Click Evidence Dossier: C2PA-compliant PDF report ready for legal '
+  [Txt]: run_sizes=[] | '👥 WHO BENEFITS?'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Targeted Individuals: Rapid removal of defamatory or non-consensual '
+  [Txt]: run_sizes=[14.0, 14.0] | '• Trust & Safety Teams: Automated verification relieving human moderat'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Journalists & Fact-Checkers: Instant verification of user-generated '
+  [Txt]: run_sizes=[14.0, 14.0] | '• Legal & Law Enforcement: Cryptographic chain of custody for digital '
+  [Txt]: run_sizes=[] | '⏱ 24-HOUR HACKATHON MILESTONE ROADMAP'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Hours 00–04 (Setup & Models): Setup FastAPI ingestion, load pre-trai'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Hours 04–10 (Forensic Core): Implement facial artifact detection, Gr'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Hours 10–16 (Spread Tracker): Build pHash indexing, Milvus vector se'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Hours 16–20 (UI & Takedown): Build React dashboard, interactive D3.j'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Hours 20–24 (Testing & Pitch): Benchmark detection accuracy across 5'
+  [Txt]: run_sizes=[] | '🚀 FUTURE SCOPE & SCALABILITY'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Browser Extension: Real-time deepfake warning badge overlay as users'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Decentralized Provenance: Integration with C2PA blockchain ledger fo'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Social Platform API: Webhook connectors directly into moderation pip'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Live Stream Forensics: Real-time audio-visual inspection for live br'
+
+================ SLIDE 7 ================
+Pictures (3):
+  Pic: Picture 8, left=0.11in, top=6.90in, w=1.27in, h=0.45in
+  Pic: Picture 5, left=5.74in, top=0.11in, w=1.85in, h=0.26in
+  Pic: Picture 13, left=6.08in, top=1.38in, w=6.57in, h=3.14in
+Text shapes (7):
+  [Txt]: run_sizes=[18.0] | '7/7'
+  [Txt]: run_sizes=[] | 'Conclusion & References'
+  [Txt]: run_sizes=[14.0, 14.0] | 'Protecting Truth, Identity, and Trust in the Age of Generative AI.  "S'
+  [Txt]: run_sizes=[] | '💡 KEY TAKEAWAYS'
+  [Txt]: run_sizes=[14.0, 14.0] | '• From Reactive to Proactive: DeepGuard transforms deepfake defense fr'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Multi-Modal Forensic Truth: Couples visual artifact heatmaps, audio '
+  [Txt]: run_sizes=[14.0, 14.0] | '• Cross-Platform Viral Containment: Identifies patient-zero source and'
+  [Txt]: run_sizes=[14.0, 14.0] | '• Restoring Victim Agency: Provides non-technical users with court-rea'
+  [Txt]: run_sizes=[] | '📚 VERIFIABLE REFERENCES & SCIENTIFIC BENCHMARKS'
+  [Txt]: run_sizes=[14.0, 14.0] | '• 1. FaceForensics++ (Rossler et al., ICCV): Learning to Detect Manipu'
+  [Txt]: run_sizes=[14.0, 14.0] | '• 2. Meta AI / Kaggle DFDC: The DeepFake Detection Challenge Dataset a'
+  [Txt]: run_sizes=[14.0, 14.0] | '• 3. Coalition for Content Provenance and Authenticity (C2PA): Open Te'
+  [Txt]: run_sizes=[14.0, 14.0] | '• 4. Sumsub Global Identity Fraud Report (2024): 550%+ Surge in AI-Gen'
+  [Txt]: run_sizes=[14.0, 14.0] | '• 5. IEEE Trans. Information Forensics & Security: Perceptual Hashing '

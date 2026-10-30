@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>KSRTC Airavat Club Class - Seat Selection</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 25px; }
+    .container { max-width: 800px; margin: 0 auto; background: #1e293b; border-radius: 14px; padding: 25px; border: 1px solid #334155; box-shadow: 0 10px 25px rgba(0,0,0,0.4); }
+    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 15px; margin-bottom: 20px; }
+    .route { font-size: 22px; font-weight: bold; color: #38bdf8; }
+    .bus-info { font-size: 13px; color: #94a3b8; }
+    
+    .deck-title { font-size: 14px; font-weight: bold; color: #fb923c; margin: 15px 0 10px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+    .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+    .seat { background: #334155; border: 2px solid #475569; border-radius: 8px; padding: 16px 10px; text-align: center; cursor: pointer; transition: all 0.2s ease; user-select: none; }
+    .seat:hover { border-color: #38bdf8; background: #1e3a8a; }
+    .seat.selected { background: #0284c7; border-color: #38bdf8; color: white; font-weight: bold; box-shadow: 0 0 12px rgba(56, 189, 248, 0.5); }
+    .seat.occupied { background: #1e293b; border-color: #334155; color: #64748b; cursor: not-allowed; opacity: 0.4; }
+    .seat-num { font-size: 15px; font-weight: bold; }
+    .seat-type { font-size: 11px; opacity: 0.8; margin-top: 4px; }
+    .seat-fare { font-size: 12px; color: #4ade80; margin-top: 4px; font-weight: 600; }
+    
+    .form-section { background: #0f172a; border-radius: 10px; padding: 20px; margin-top: 25px; border: 1px solid #334155; }
+    .form-title { font-size: 15px; font-weight: bold; color: #38bdf8; margin-bottom: 15px; }
+    .passenger-row { display: grid; grid-template-columns: 2fr 1fr 1.5fr; gap: 15px; margin-bottom: 12px; }
+    input, select { background: #1e293b; border: 1px solid #475569; color: white; padding: 10px 14px; border-radius: 6px; font-size: 14px; outline: none; }
+    input:focus, select:focus { border-color: #38bdf8; }
+    
+    .btn-submit { background: #16a34a; color: white; border: none; width: 100%; padding: 14px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 20px; transition: background 0.2s; }
+    .btn-submit:hover { background: #15803d; }
+    .summary { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; font-size: 16px; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <div class="route" id="route-title">Bengaluru &rarr; Mysuru</div>
+        <div class="bus-info">KSRTC Airavat Club Class Multi-Axle (Trip #KA-09-F-9921) | Departure: 22:30</div>
+      </div>
+      <div style="text-align: right;">
+        <span style="background: #0284c7; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: bold;">LIVE INVENTORY</span>
+      </div>
+    </div>
+
+    <!-- LOWER SLEEPER DECK -->
+    <div class="deck-title">Lower Sleeper Deck (AC Berths)</div>
+    <div class="grid" id="lower-deck">
+      <div class="seat available" id="seat-L1" data-seat="L1" data-berth="Lower" data-fare="840" onclick="toggleSeat(this)">
+        <div class="seat-num">14A</div>
+        <div class="seat-type">Lower Berth</div>
+        <div class="seat-fare">&#8377;840</div>
+      </div>
+      <div class="seat available" id="seat-L2" data-seat="L2" data-berth="Lower" data-fare="840" onclick="toggleSeat(this)">
+        <div class="seat-num">14B</div>
+        <div class="seat-type">Lower Berth</div>
+        <div class="seat-fare">&#8377;840</div>
+      </div>
+      <div class="seat occupied" id="seat-L3" data-seat="L3">
+        <div class="seat-num">15A</div>
+        <div class="seat-type">Booked</div>
+        <div class="seat-fare">-</div>
+      </div>
+      <div class="seat available" id="seat-L4" data-seat="L4" data-berth="Lower" data-fare="840" onclick="toggleSeat(this)">
+        <div class="seat-num">15B</div>
+        <div class="seat-type">Lower Berth</div>
+        <div class="seat-fare">&#8377;840</div>
+      </div>
+    </div>
+
+    <!-- UPPER SLEEPER DECK -->
+    <div class="deck-title">Upper Sleeper Deck (AC Berths)</div>
+    <div class="grid" id="upper-deck">
+      <div class="seat occupied" id="seat-U1" data-seat="U1"><div class="seat-num">U1</div><div class="seat-type">Booked</div><div class="seat-fare">-</div></div>
+      <div class="seat occupied" id="seat-U2" data-seat="U2"><div class="seat-num">U2</div><div class="seat-type">Booked</div><div class="seat-fare">-</div></div>
+      <div class="seat available" id="seat-U3" data-seat="U3" data-berth="Upper" data-fare="790" onclick="toggleSeat(this)"><div class="seat-num">U3</div><div class="seat-type">Upper Berth</div><div class="seat-fare">&#8377;790</div></div>
+      <div class="seat available" id="seat-U4" data-seat="U4" data-berth="Upper" data-fare="790" onclick="toggleSeat(this)"><div class="seat-num">U4</div><div class="seat-type">Upper Berth</div><div class="seat-fare">&#8377;790</div></div>
+    </div>
+
+    <!-- PASSENGER DETAILS FORM -->
+    <div class="form-section" id="passenger-section">
+      <div class="form-title">Automated Passenger Vault Details</div>
+      <div class="passenger-row">
+        <input type="text" id="p1-name" placeholder="Primary Passenger Name">
+        <input type="number" id="p1-age" placeholder="Age">
+        <select id="p1-gender">
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+        </select>
+      </div>
+      <div class="passenger-row">
+        <input type="text" id="p2-name" placeholder="Passenger 2 Name">
+        <input type="number" id="p2-age" placeholder="Age">
+        <select id="p2-gender">
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+        </select>
+      </div>
+      
+      <div class="summary">
+        <span id="selected-seats-label">Selected Berths: None</span>
+        <span id="total-fare" style="color: #4ade80;">Total: &#8377;0</span>
+      </div>
+    </div>
+
+    <button class="btn-submit" id="btn-proceed-payment" onclick="proceedPayment()">
+      Lock Berths & Proceed to Payment Terminal &rarr;
+    </button>
+  </div>
+
+  <script>
+    let selectedSeats = [];
+    let farePerSeat = 840;
+
+    function toggleSeat(el) {
+      if (el.classList.contains('occupied')) return;
+      let seatId = el.querySelector('.seat-num').innerText;
+      
+      if (el.classList.contains('selected')) {
+        el.classList.remove('selected');
+        selectedSeats = selectedSeats.filter(s => s !== seatId);
+      } else {
+        if (selectedSeats.length >= 2) {
+          alert("Maximum 2 berths allowed per booking in this demo.");
+          return;
+        }
+        el.classList.add('selected');
+        selectedSeats.push(seatId);
+      }
+      updateSummary();
+    }
+
+    function updateSummary() {
+      let lbl = document.getElementById('selected-seats-label');
+      let total = document.getElementById('total-fare');
+      if (selectedSeats.length === 0) {
+        lbl.innerText = "Selected Berths: None";
+        total.innerText = "Total: ₹0";
+      } else {
+        lbl.innerText = "Selected Berths: " + selectedSeats.join(", ");
+        total.innerText = "Total: ₹" + (selectedSeats.length * farePerSeat).toLocaleString('en-IN');
+      }
+    }
+
+    function proceedPayment() {
+      if (selectedSeats.length === 0) {
+        alert("Please select at least 1 berth.");
+        return;
+      }
+      let p1 = document.getElementById('p1-name').value;
+      if (!p1) {
+        alert("Please enter passenger details.");
+        return;
+      }
+      window.location.href = "/mock/checkout";
+    }
+  </script>
+</body>
+</html>

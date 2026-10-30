@@ -1,0 +1,59 @@
+{
+  "profile": {
+    "full_name": "Yashwanth K R",
+    "first_name": "Yashwanth",
+    "last_name": "K R",
+    "email": "yashwanth.kr.dbit@gmail.com",
+    "phone": "+91 98450 12345",
+    "gender": "Male",
+    "dob": "2003-08-14",
+    "age": 23,
+    "aadhaar_masked": "XXXX-XXXX-8921"
+  },
+  "academic": {
+    "institution": "Don Bosco Institute of Technology (DBIT)",
+    "university": "Visvesvaraya Technological University (VTU)",
+    "course": "Bachelor of Technology (B.Tech)",
+    "branch": "Computer Science & Engineering",
+    "current_year": "4th Year / 8th Semester",
+    "cgpa": "8.85",
+    "tenth_percentage": "92.4%",
+    "twelfth_percentage": "89.6%",
+    "skills": ["Python", "FastAPI", "Agentic AI", "Playwright", "Distributed Systems"],
+    "key_projects": [
+      "VoiceKirana: Offline Edge Intelligence Ledger for Retail Kirana Stores",
+      "ApplyCopilot: Autonomous Multi-Modal Web Agent with 5 Specialized Execution Protocols"
+    ],
+    "scholarship_statement_points": [
+      "Aspiring AI systems engineer dedicated to building vernacular technology for unorganized Indian retail and civic inclusion.",
+      "Maintained top 5% academic standing across all 7 semesters while leading collegiate hackathon teams.",
+      "Requires educational grant assistance to fund research publication fees and edge compute test hardware."
+    ]
+  },
+  "transit_preferences": {
+    "default_origin": "Bengaluru",
+    "default_destination": "Mysuru",
+    "preferred_berth": "Lower Sleeper",
+    "passengers": [
+      {
+        "name": "Yashwanth K R",
+        "age": 23,
+        "gender": "Male",
+        "berth_preference": "Lower"
+      },
+      {
+        "name": "Raj Aanada",
+        "age": 22,
+        "gender": "Male",
+        "berth_preference": "Lower"
+      }
+    ]
+  },
+  "address": {
+    "line1": "Kumbalagodu, Mysore Road",
+    "city": "Bengaluru",
+    "state": "Karnataka",
+    "pincode": "560074",
+    "country": "India"
+  }
+}

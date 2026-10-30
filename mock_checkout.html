@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AirTravel Express - Ticket Checkout</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f1f5f9; padding: 30px; }
+    .card { background: white; max-width: 650px; margin: 0 auto; border-radius: 12px; padding: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); }
+    h2 { margin-top: 0; color: #0f172a; }
+    .item-row { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 15px; color: #334155; }
+    .dark-pattern-box { background: #fff7ed; border: 1.5px solid #fb923c; border-radius: 8px; padding: 12px; margin: 15px 0; }
+    .dark-pattern-box label { font-weight: bold; color: #9a3412; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+    .dark-pattern-sub { font-size: 12px; color: #7c2d12; margin-top: 4px; margin-left: 24px; }
+    .total-box { border-top: 2px dashed #cbd5e1; padding-top: 15px; margin-top: 15px; display: flex; justify-content: space-between; font-size: 20px; font-weight: bold; color: #0f172a; }
+    .btn-pay { background: #0284c7; color: white; border: none; width: 100%; padding: 14px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 20px; }
+    .savings-badge { display: none; background: #dcfce7; color: #166534; padding: 8px 12px; border-radius: 6px; font-size: 14px; font-weight: bold; margin-top: 10px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Flight Reservation: BLR &rarr; DEL</h2>
+    <div class="item-row">
+      <span>1x Adult Economy Ticket (Airavat Express)</span>
+      <span id="base-fare" data-val="4200">₹4,200</span>
+    </div>
+    <div class="item-row">
+      <span>Airport Development & Fuel Tax (Mandatory)</span>
+      <span id="tax-fare" data-val="450">₹450</span>
+    </div>
+
+    <!-- SNEAKY PRE-CHECKED DARK PATTERN 1 -->
+    <div class="dark-pattern-box" id="box-insurance">
+      <label>
+        <input type="checkbox" id="chk-insurance" data-fee="199" checked onchange="recalculateTotal()">
+        Add Trip Protection & Medical Travel Insurance (+₹199)
+      </label>
+      <div class="dark-pattern-sub">87% of smart travelers choose this to avoid cancellation penalties.</div>
+    </div>
+
+    <!-- SNEAKY PRE-CHECKED DARK PATTERN 2 -->
+    <div class="dark-pattern-box" id="box-donation">
+      <label>
+        <input type="checkbox" id="chk-donation" data-fee="25" checked onchange="recalculateTotal()">
+        Donate to Rural Child Literacy Fund (+₹25)
+      </label>
+      <div class="dark-pattern-sub">Help educate underprivileged students across rural Karnataka.</div>
+    </div>
+
+    <!-- SNEAKY PRE-CHECKED DARK PATTERN 3 -->
+    <div class="dark-pattern-box" id="box-baggage">
+      <label>
+        <input type="checkbox" id="chk-priority" data-fee="150" checked onchange="recalculateTotal()">
+        Priority Express Baggage Tag & Fast Check-in (+₹150)
+      </label>
+      <div class="dark-pattern-sub">Save 15 minutes at baggage carousel on arrival.</div>
+    </div>
+
+    <div class="total-box">
+      <span>Total Amount to Pay:</span>
+      <span id="total-fare">₹5,024</span>
+    </div>
+
+    <div class="savings-badge" id="savings-badge">
+      &#10004; Jarvis Clean Checkout: ₹374 in hidden fees stripped!
+    </div>
+
+    <button class="btn-pay" id="btn-submit">Proceed to Payment Gateway</button>
+  </div>
+
+  <script>
+    function recalculateTotal() {
+      let base = 4200;
+      let tax = 450;
+      let insurance = document.getElementById('chk-insurance').checked ? 199 : 0;
+      let donation = document.getElementById('chk-donation').checked ? 25 : 0;
+      let priority = document.getElementById('chk-priority').checked ? 150 : 0;
+      let total = base + tax + insurance + donation + priority;
+      document.getElementById('total-fare').innerText = '₹' + total.toLocaleString('en-IN');
+      
+      let feesSaved = (199 - insurance) + (25 - donation) + (150 - priority);
+      if (feesSaved > 0) {
+        let b = document.getElementById('savings-badge');
+        b.style.display = 'block';
+        b.innerHTML = `&#10004; Jarvis Clean Checkout: ₹${feesSaved} in deceptive fees stripped!`;
+      }
+    }
+    recalculateTotal();
+  </script>
+</body>
+</html>

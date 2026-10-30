@@ -1,0 +1,38 @@
+﻿=== REFERENCE PPT ===
+Slide size: 13.33" x 7.50"
+Total slides: 8
+
+=== SLIDE 1 ===
+  [0] TEXTBOX 'Title 1': pos=(1.67,1.23) size=(10.0x2.61) | ''
+  [1] TEXTBOX 'Subtitle 2': pos=(1.67,3.94) size=(10.0x1.81) | ''
+  [2] PICTURE 'Picture 3': pos=(0.0,0.0) size=(13.33x7.5)
+       Image content_type=image/jpeg, blob_size=139485 bytes
+       Saved: ref_img_slide1_2.jpg
+
+=== SLIDE 2 ===
+  [0] TEXTBOX 'Title 1': pos=(0.92,0.4) size=(11.5x1.45) | ''
+  [1] SHAPE 'Content Placeholder 3' type=PLACEHOLDER (14): pos=(0.0,0.0) size=(13.33x7.5)
+
+=== SLIDE 3 ===
+  [0] TEXTBOX 'Title 1': pos=(0.92,0.4) size=(11.5x1.45) | ''
+  [1] SHAPE 'Content Placeholder 3' type=PLACEHOLDER (14): pos=(0.0,0.0) size=(13.33x7.5)
+
+=== SLIDE 4 ===
+  [0] TEXTBOX 'Title 1': pos=(0.92,0.4) size=(11.5x1.45) | ''
+  [1] SHAPE 'Content Placeholder 3' type=PLACEHOLDER (14): pos=(0.0,0.0) size=(13.33x7.5)
+
+=== SLIDE 5 ===
+  [0] TEXTBOX 'Title 1': pos=(0.92,0.4) size=(11.5x1.45) | ''
+  [1] SHAPE 'Content Placeholder 3' type=PLACEHOLDER (14): pos=(0.0,0.0) size=(13.33x7.5)
+
+=== SLIDE 6 ===
+  [0] TEXTBOX 'Title 1': pos=(0.92,0.4) size=(11.5x1.45) | ''
+  [1] SHAPE 'Content Placeholder 3' type=PLACEHOLDER (14): pos=(0.0,0.0) size=(13.33x7.5)
+
+=== SLIDE 7 ===
+  [0] TEXTBOX 'Title 1': pos=(0.92,0.4) size=(11.5x1.45) | ''
+  [1] SHAPE 'Content Placeholder 3' type=PLACEHOLDER (14): pos=(0.0,0.0) size=(13.33x7.5)
+
+=== SLIDE 8 ===
+  [0] TEXTBOX 'Title 1': pos=(0.92,0.4) size=(11.5x1.45) | ''
+  [1] SHAPE 'Content Placeholder 3' type=PLACEHOLDER (14): pos=(0.0,0.0) size=(13.33x7.5)

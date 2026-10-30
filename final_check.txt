@@ -1,0 +1,121 @@
+Slides: 7
+Slide 1: 5 images, 9 text boxes
+  P: [14.0] | AWS SBG AFTERHOURS 1.0  ·  Pre-Qualification Round
+  P: [44.0] | DeepGuard
+  P: [20.0] | Deepfake Detection & Viral Takedown Tracker
+  P: [16.0] | Problem Statement 04  ·  Trust & Safety · Media Forensics · 
+  P: [12.0] | ─────────────────────────────────────────
+  P: [14.0] | TEAM DETAILS
+  P: [17.0] | Team Name: DeepGuard
+  P: [14.0] | Domain: Trust & Safety  ·  ML  ·  Media Forensics
+  P: [14.0] | TEAM MEMBERS
+  P: [14.0] | • Yashwanth KR  –  Lead / ML Architecture
+  P: [14.0] | • Team Member 2  –  Forensic Pipeline
+  P: [14.0] | • Team Member 3  –  Tracker & Dashboard
+  P: [14.0] | • Team Member 4  –  Data & Evaluation
+Slide 2: 3 images, 9 text boxes
+  P: [18.0] | 2/7
+  P: [22.0] | Problem Statement & Its Relevance
+  P: [14.0] | PS 04: Deepfake Detection & Takedown Tracker  |  Trust & Saf
+  P: [15.0] | ⚠  WHAT PROBLEM ARE WE SOLVING?
+  P: [15.0, 14.0] | • Crisis of Synthetic Media:  AI-generated deepfake videos, 
+  P: [15.0, 14.0] | • Viral Spread Goes Unchecked:  Once posted, deepfakes propa
+  P: [15.0, 14.0] | • Identity & Reputational Harm:  Victims — celebrities, poli
+  P: [15.0, 14.0] | • Slow & Manual Takedowns:  Platforms rely on human reports;
+  P: [15.0] | 👥  FOR WHOM IS THIS A PROBLEM?
+  P: [15.0, 14.0] | • Individual Victims:  Public figures, professionals, and pr
+  P: [15.0, 14.0] | • Media & Journalism:  News outlets unable to verify authent
+  P: [15.0, 14.0] | • Content Platforms:  Social networks overwhelmed by sheer v
+  P: [15.0, 14.0] | • Legal & Law Enforcement:  Investigators lacking automated 
+  P: [15.0] | 🌐  WHY DOES THIS MATTER?
+  P: [15.0, 14.0] | • 96% accuracy gap:  Human participants identify deepfakes a
+  P: [15.0, 14.0] | • 500%+ growth in incidents:  Deepfake incidents grew 500% Y
+  P: [15.0, 14.0] | • $78 billion projected damage:  Economic and reputational h
+  P: [15.0, 14.0] | • Erosion of Digital Trust:  Unverified media destroys socie
+Slide 3: 3 images, 9 text boxes
+  P: [18.0] | 3/7
+  P: [22.0] | Proposed Solution & Innovation
+  P: [14.0] | DeepGuard: Multi-Modal Forensic Detection + Cross-Platform V
+  P: [14.0] | PIPELINE:
+  P: [14.0, 13.0, 14.0, 13.0, 14.0, 13.0, 14.0, 13.0] | ① Media Ingestion (URL/upload + fingerprinting)  ▶  ② Forens
+  P: [15.0] | 🔬  CORE CAPABILITIES
+  P: [15.0, 14.0] | • Multi-Modal Detection Engine:  Fuses EfficientNet-B4 (visu
+  P: [15.0, 14.0] | • Confidence Scoring:  Returns per-frame confidence heatmap 
+  P: [15.0, 14.0] | • Content Fingerprinting:  Generates perceptual hashes (pHas
+  P: [15.0, 14.0] | • Provenance Ledger:  Immutable audit trail linking original
+  P: [15.0] | 💡  INNOVATION HIGHLIGHTS
+  P: [15.0, 14.0] | • Viral Spread Graph Engine:  Constructs a directed propagat
+  P: [15.0, 14.0] | • Zero-Shot New Architecture Generalization:  Ensemble disag
+  P: [15.0, 14.0] | • Automated Takedown Orchestration:  Generates pre-filled DM
+  P: [15.0, 14.0] | • Explainable Forensic Report:  Generates human-readable PDF
+Slide 4: 3 images, 7 text boxes
+  P: [18.0] | 4/7
+  P: [22.0] | Existing Solutions & Differentiation
+  P: [14.0] | Why existing deepfake detectors & content moderation tools f
+  P: [15.0] | TOOL COMPARISON MATRIX
+  P: [15.0] | • 1. Detection Scope
+  P: [14.0] | ❌ Most tools (FaceForensics++, Microsoft DFDC): Detect face-
+  P: [14.0] | ✅ DeepGuard: Multi-modal fusion — video frames + audio chann
+  P: [15.0] | • 2. Generalization to Novel Models
+  P: [14.0] | ❌ Existing classifiers: Brittle; fail on new GAN architectur
+  P: [14.0] | ✅ DeepGuard: Ensemble disagreement + frequency-domain artifa
+  P: [15.0] | • 3. Viral Spread Tracking
+  P: [14.0] | ❌ YouTube/Meta content ID: Detects exact hash matches only; 
+  P: [14.0] | ✅ DeepGuard: Perceptual hash + embedding similarity traces v
+  P: [15.0] | • 4. Takedown Automation
+  P: [14.0] | ❌ Current workflow: Victims manually file individual platfor
+  P: [14.0] | ✅ DeepGuard: Automated DMCA batch submission + platform API 
+  P: [15.0] | 🏆  KEY COMPETITIVE ADVANTAGE
+  P: [14.0] | DeepGuard is the only end-to-end platform unifying multi-mod
+Slide 5: 3 images, 9 text boxes
+  P: [18.0] | 5/7
+  P: [22.0] | Technical Approach & Feasibility
+  P: [14.0] | Architecture · AI/ML Stack · Hackathon Build Scope · What Re
+  P: [15.0] | 🏗  SYSTEM ARCHITECTURE
+  P: [15.0, 14.0] | • Ingestion API:  FastAPI + Celery async task queue; accepts
+  P: [15.0, 14.0] | • Video Forensic Engine:  EfficientNet-B4 fine-tuned on Face
+  P: [15.0, 14.0] | • Audio Engine:  WavLM large model for voice biometric verif
+  P: [15.0, 14.0] | • Spread Tracker:  Redis-cached perceptual hash (pHash) inde
+  P: [15.0, 14.0] | • Frontend:  React + D3.js interactive spread graph; confide
+  P: [15.0] | 🤖  AI STACK & EXPLAINABILITY
+  P: [15.0, 14.0] | • Detection Ensemble:  4 specialized models vote per modalit
+  P: [15.0, 14.0] | • Zero-Shot Generalization:  Frequency-domain artifact detec
+  P: [15.0, 14.0] | • Explainability (XAI):  GradCAM frame heatmaps highlight ma
+  P: [15.0, 14.0] | • Continuous Learning:  False-positive corrections federated
+  P: [15.0] | 🛠  HACKATHON BUILD SCOPE
+  P: [14.0, 14.0] | • Hrs 0–5  (Setup & Data):  Load pre-trained EfficientNet-B4
+  P: [14.0, 14.0] | • Hrs 5–12  (Core Detection):  Build video + audio analysis 
+  P: [14.0, 14.0] | • Hrs 12–18  (Spread Tracker):  Build pHash index; scrape 3 
+  P: [14.0, 14.0] | • Hrs 18–24  (Demo & Polish):  Integrate takedown report gen
+Slide 6: 3 images, 7 text boxes
+  P: [18.0] | 6/7
+  P: [22.0] | Expected Impact & Execution Plan
+  P: [14.0] | Quantifiable Outcomes · Stakeholder Benefits · 24-Hour Miles
+  P: [15.0] | 📈  MEASURABLE IMPACT & OUTCOMES
+  P: [15.0, 14.0] | • > 93% Detection Accuracy:  Ensemble fusion achieves >93% F
+  P: [15.0, 14.0] | • > 85% Spread Coverage:  pHash propagation graph tracks >85
+  P: [15.0, 14.0] | • < 15-Min Takedown:  Automated DMCA+API pipeline collapses 
+  P: [15.0, 14.0] | • Victim Empowerment:  Non-technical users receive a one-cli
+  P: [15.0, 14.0] | • Platform-Level Scalability:  Stateless worker pool scales 
+  P: [15.0, 14.0] | • Future: Browser Extension:  Real-time deepfake detection o
+  P: [15.0] | ⏱  24-HOUR EXECUTION ROADMAP
+  P: [14.0, 14.0] | • Hours 00–05  (Foundation):  Configure FastAPI ingestion AP
+  P: [14.0, 14.0] | • Hours 05–12  (Detection Core):  Build per-frame video work
+  P: [14.0, 14.0] | • Hours 12–18  (Spread Tracker):  Build Redis pHash index; s
+  P: [14.0, 14.0] | • Hours 18–22  (Takedown Module):  Implement DMCA report gen
+  P: [14.0, 14.0] | • Hours 22–24  (Demo Polish):  End-to-end demo on 5 curated 
+  P: [14.0, 14.0] | • Future Horizon:  eBPF-based browser extension; federated l
+Slide 7: 3 images, 7 text boxes
+  P: [18.0] | 7/7
+  P: [22.0] | Conclusion & References
+  P: [14.0] | DeepGuard — Restoring Truth to the Digital Media Ecosystem
+  P: [15.0] | SUMMARY
+  P: [15.0, 14.0] | • From Symptom to System:  DeepGuard addresses deepfake prol
+  P: [15.0, 14.0] | • Beyond Detection — Accountability:  By generating verifiab
+  P: [15.0, 14.0] | • Built to Scale:  Stateless microservice architecture, perc
+  P: [15.0] | VERIFIABLE REFERENCES
+  P: [14.0, 14.0] | • Rossler et al. (2019) — FaceForensics++:  Learning to Dete
+  P: [14.0, 14.0] | • Dolhansky et al. (2020) — DFDC Dataset:  The DeepFake Dete
+  P: [14.0, 14.0] | • Sumsub (2024) — Identity Fraud Report:  500%+ growth in AI
+  P: [14.0, 14.0] | • Deloitte (2024):  Projected $78B economic damage from synt
+  P: [14.0, 14.0] | • C2PA (2024) — Content Provenance Standard:  Coalition for 

@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wormhole: Real-Time Autonomous Agent Cockpit</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: #151c2e;
+      --card-border: #23304d;
+      --accent-blue: #0ea5e9;
+      --accent-green: #10b981;
+      --accent-orange: #f97316;
+      --accent-purple: #a855f7;
+      --accent-red: #ef4444;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 18px; min-height: 100vh; overflow-x: hidden; }
+    
+    .navbar { display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); border: 1px solid var(--card-border); padding: 12px 20px; border-radius: 12px; margin-bottom: 16px; }
+    .brand { font-size: 19px; font-weight: 800; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; color: var(--accent-blue); }
+    .badge-status { background: rgba(16, 185, 129, 0.15); color: var(--accent-green); border: 1px solid var(--accent-green); padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; display: flex; align-items: center; gap: 6px; }
+    .badge-status::before { content: ""; width: 7px; height: 7px; background: var(--accent-green); border-radius: 50%; display: inline-block; animation: blink 1.5s infinite; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    .grid-layout { display: grid; grid-template-columns: 1fr 1.35fr; gap: 18px; }
+    .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 18px; position: relative; }
+    .card-title { font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+    
+    /* Input Area */
+    .input-box { display: flex; gap: 8px; margin-bottom: 12px; }
+    input[type="text"] { flex: 1; background: #0f172a; border: 1px solid var(--card-border); border-radius: 8px; padding: 11px 14px; color: white; font-size: 13.5px; outline: none; }
+    input[type="text"]:focus { border-color: var(--accent-blue); }
+    .btn { background: var(--accent-blue); color: white; border: none; padding: 11px 18px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 13px; }
+    .btn:hover { opacity: 0.9; }
+    .btn-mic { background: #1e293b; border: 1px solid var(--card-border); color: #cbd5e1; width: 42px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+    .btn-mic.listening { background: var(--accent-red); color: white; border-color: var(--accent-red); animation: pulse 1s infinite; }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+
+    /* Quick Test Chips */
+    .quick-title { font-size: 11px; color: var(--text-muted); font-weight: bold; margin-bottom: 6px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+    .chip { background: #1e293b; border: 1px solid var(--card-border); padding: 6px 10px; border-radius: 7px; font-size: 11.5px; font-weight: 600; cursor: pointer; transition: 0.2s; color: #cbd5e1; }
+    .chip:hover { border-color: var(--accent-blue); color: white; background: #243452; }
+
+    /* Protocol Badges */
+    .protocol-indicator { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 9px; background: #0f172a; border: 1px solid var(--card-border); margin-bottom: 12px; }
+    .p-tag { font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 5px; }
+    .tag-idle { background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid #475569; }
+    .tag-running { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); border: 1px solid var(--accent-green); }
+    .tag-interrupted { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); border: 1px solid var(--accent-red); }
+    .tag-manual { background: rgba(249, 115, 22, 0.2); color: var(--accent-orange); border: 1px solid var(--accent-orange); }
+
+    /* Log Stream */
+    .terminal { background: #070a12; border: 1px solid #1e293b; border-radius: 9px; padding: 12px; font-family: 'Consolas', monospace; font-size: 11.5px; height: 280px; overflow-y: auto; color: #a5f3fc; }
+    .log-line { margin-bottom: 4px; line-height: 1.4; }
+    .log-time { color: #64748b; margin-right: 5px; }
+    .log-success { color: #4ade80; }
+    .log-warn { color: #fbbf24; }
+    .log-danger { color: #f87171; }
+
+    /* Interactive Live Screencast Viewport */
+    .viewport-container { position: relative; width: 100%; height: 520px; background: #070a12; border: 1px solid var(--card-border); border-radius: 10px; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: crosshair; }
+    #screencast-canvas { width: 100%; height: 100%; object-fit: contain; display: block; }
+    
+    .cursor-hint { position: absolute; top: 10px; left: 10px; background: rgba(15, 23, 42, 0.85); border: 1px solid #334155; padding: 4px 10px; border-radius: 6px; font-size: 11px; color: #94a3b8; pointer-events: none; }
+    .cursor-hint b { color: #38bdf8; }
+
+    /* Manual Mode Floating Banner */
+    .manual-banner { display: none; position: absolute; bottom: 12px; left: 12px; right: 12px; background: rgba(249, 115, 22, 0.95); color: white; padding: 10px 16px; border-radius: 8px; font-size: 12px; font-weight: bold; justify-content: space-between; align-items: center; z-index: 10; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+    .btn-manual-done { background: white; color: #c2410c; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+
+    /* Human-in-the-Loop Interrupt Modal */
+    .interrupt-overlay { display: none; position: absolute; inset: 0; background: rgba(11, 15, 25, 0.85); backdrop-filter: blur(4px); z-index: 50; flex-direction: column; align-items: center; justify-content: center; padding: 25px; text-align: center; border-radius: 10px; }
+    .interrupt-modal { background: #1e293b; border: 2px solid var(--accent-red); border-radius: 12px; padding: 24px; max-width: 480px; width: 100%; box-shadow: 0 10px 30px rgba(239, 68, 68, 0.3); }
+    .modal-title { font-size: 16px; font-weight: bold; color: #f87171; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px; }
+    .modal-desc { font-size: 13px; color: #cbd5e1; margin-bottom: 18px; line-height: 1.4; }
+    .modal-actions { display: flex; flex-direction: column; gap: 10px; }
+    .btn-modal-resume { background: var(--accent-green); color: white; border: none; padding: 10px; border-radius: 7px; font-weight: bold; cursor: pointer; }
+    .btn-modal-manual { background: var(--accent-orange); color: white; border: none; padding: 10px; border-radius: 7px; font-weight: bold; cursor: pointer; }
+    .replan-box { display: flex; gap: 6px; margin-top: 8px; }
+    .replan-box input { flex: 1; padding: 8px 10px; font-size: 12px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <div class="navbar">
+    <div class="brand">
+      <span>&#127744;</span> WORMHOLE COCKPIT
+      <span style="font-size: 11px; color: var(--text-muted); font-weight: normal; margin-left: 8px;">Real-Time Autonomous Agent &amp; Human-in-the-Loop Gate</span>
+    </div>
+    <div class="badge-status" id="ws-badge">CONNECTING TO LIVE STREAM...</div>
+  </div>
+
+  <div class="grid-layout">
+    <!-- LEFT PANEL: JARVIS VOICE HUD -->
+    <div class="card">
+      <div class="card-title">
+        <span>Jarvis Command Interface</span>
+        <span id="active-url" style="font-size: 11px; color: var(--accent-blue); text-transform: none; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Loading...</span>
+      </div>
+
+      <!-- INPUT BAR -->
+      <div class="input-box">
+        <input type="text" id="user-input" placeholder="Type or speak: e.g. 'Search flights on Google' or 'Navigate to Wikipedia'..." onkeypress="handleKey(event)">
+        <button class="btn-mic" id="btn-mic" onclick="toggleMic()" title="Voice Microphone">&#127908;</button>
+        <button class="btn" id="btn-send" onclick="sendPrompt()">Execute &rarr;</button>
+      </div>
+
+      <!-- QUICK TEST SCENARIOS -->
+      <div class="quick-title">QUICK SCENARIOS (CLICK TO DISPATCH):</div>
+      <div class="chips">
+        <div class="chip" onclick="triggerScenario('live_wiki')">&#127760; Real Web: Search AI on Wikipedia</div>
+        <div class="chip" onclick="triggerScenario('live_hn')">&#128240; Real Web: Open Hacker News</div>
+        <div class="chip" onclick="triggerScenario('transit')">&#128652; KSRTC Sleeper Reservation</div>
+        <div class="chip" onclick="triggerScenario('darkpattern')">&#128722; Anti-Dark-Pattern Fee Stripper</div>
+        <div class="chip" onclick="triggerScenario('exorcist')">&#128196; Document Exorcist (32KB Photo)</div>
+      </div>
+
+      <!-- AGENT STATUS BADGE -->
+      <div class="protocol-indicator">
+        <span style="font-size: 12px; font-weight: bold;">Agent Status:</span>
+        <span class="p-tag tag-idle" id="agent-state-badge">IDLE</span>
+        <span id="agent-status-text" style="font-size: 11.5px; color: var(--text-muted); margin-left: auto;">Click viewport anytime to interrupt</span>
+      </div>
+
+      <!-- TERMINAL LOGS -->
+      <div class="card-title" style="margin-top: 10px;">
+        <span>Real-Time Agentic Telemetry</span>
+        <span style="font-size: 11px; cursor: pointer; color: var(--accent-blue);" onclick="clearLogs()">Clear</span>
+      </div>
+      <div class="terminal" id="terminal-logs">
+        <div class="log-line"><span class="log-time">[00:00:00]</span> Wormhole real-time agent initialized.</div>
+        <div class="log-line"><span class="log-time">[00:00:00]</span> Live CDP WebSocket connecting...</div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: INTERACTIVE LIVE VIEWPORT -->
+    <div class="card">
+      <div class="card-title">
+        <span>Live Interactive Viewport (Real Browser Stream)</span>
+        <span style="font-size: 11px; color: var(--accent-green);">&#9679; Low-Latency CDP Screencast</span>
+      </div>
+
+      <div class="viewport-container" id="viewport-container">
+        <!-- Interactive Canvas -->
+        <canvas id="screencast-canvas" width="1280" height="800" tabindex="0" style="outline: none;"></canvas>
+        
+        <div class="cursor-hint" id="cursor-hint">
+          <b>Cursor Active:</b> Click anywhere to trigger <b>Instant Interrupt</b> or interact.
+        </div>
+
+        <!-- Manual Mode Floating Banner -->
+        <div class="manual-banner" id="manual-banner">
+          <span>&#128073; <b>Manual Mode Active:</b> Click/type to log in or solve CAPTCHA directly.</span>
+          <button class="btn-manual-done" onclick="completeManualHandover()">&#10004; Done, Resume Jarvis</button>
+        </div>
+
+        <!-- HUMAN-IN-THE-LOOP INTERRUPT MODAL -->
+        <div class="interrupt-overlay" id="interrupt-overlay">
+          <div class="interrupt-modal">
+            <div class="modal-title">&#9888; AUTONOMOUS AGENT PAUSED</div>
+            <div class="modal-desc" id="interrupt-reason">
+              You clicked inside the live showcase! The agent stopped immediately so you can inspect or redirect it.
+            </div>
+            
+            <div class="modal-actions">
+              <button class="btn-modal-resume" onclick="resolveInterrupt('RESUME')">&#9654; It was by mistake &mdash; Continue Agent</button>
+              <button class="btn-modal-manual" onclick="resolveInterrupt('HANDOVER')">&#128272; I'll handle this manually (Log in / CAPTCHA)</button>
+              
+              <div class="replan-box">
+                <input type="text" id="replan-input" placeholder="Or type new instruction: e.g. 'Click 2nd result'...">
+                <button class="btn" style="padding: 8px 12px; font-size: 12px;" onclick="resolveReplan()">Change &rarr;</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div style="margin-top: 10px; font-size: 11.5px; color: var(--text-muted); display: flex; justify-content: space-between;">
+        <span>Resolution: 1280x800 | Full Bidirectional Pointer Forwarding</span>
+        <span id="fps-counter">CDP Connected</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let ws;
+    let canvas = document.getElementById("screencast-canvas");
+    let ctx = canvas.getContext("2d");
+    let currentImage = new Image();
+
+    // 1. Establish WebSocket Screencast Connection
+    function connectWebSocket() {
+      const loc = window.location;
+      const wsUri = (loc.protocol === "https:" ? "wss://" : "ws://") + loc.host + "/ws/screencast";
+      
+      ws = new WebSocket(wsUri);
+      
+      ws.onopen = () => {
+        document.getElementById("ws-badge").innerText = "LIVE STREAM ACTIVE";
+        document.getElementById("ws-badge").style.borderColor = "var(--accent-green)";
+        log("WebSocket connected to Playwright CDP screencast.", "success");
+      };
+
+      ws.onmessage = (event) => {
+        let msg = JSON.parse(event.data);
+        
+        // Incoming Screencast Frame
+        if (msg.type === "FRAME") {
+          currentImage.onload = () => {
+            ctx.drawImage(currentImage, 0, 0, canvas.width, canvas.height);
+          };
+          currentImage.src = "data:image/jpeg;base64," + msg.data;
+          
+          if (msg.url) {
+            document.getElementById("active-url").innerText = msg.url;
+          }
+          updateAgentState(msg.state);
+        }
+
+        // Interrupt Triggered
+        else if (msg.type === "INTERRUPT_TRIGGERED") {
+          updateAgentState("INTERRUPTED");
+          document.getElementById("interrupt-reason").innerText = msg.message;
+          document.getElementById("interrupt-overlay").style.display = "flex";
+          log("[INTERRUPT] Agent stopped on user canvas click. Awaiting instructions.", "danger");
+        }
+
+        // Sensitive Page Gate (Login / Payment / CAPTCHA)
+        else if (msg.type === "PAYMENT_OR_LOGIN_GATE") {
+          updateAgentState("PAUSED_FOR_HUMAN");
+          document.getElementById("interrupt-reason").innerText = "Sensitive page detected (Login, Payment, or Verification). Take control to complete safely.";
+          document.getElementById("interrupt-overlay").style.display = "flex";
+          log("[SAFETY GATE] Paused for human login / verification.", "warn");
+        }
+
+        // General Logs
+        else if (msg.type === "LOG") {
+          log(msg.message, "warn");
+        } else if (msg.type === "STEP") {
+          log(`[STEP ${msg.step}] URL: ${msg.url} ("${msg.title}")`);
+        } else if (msg.type === "ACTION") {
+          log(`  -> Action: ${msg.action} (${msg.reason})`, "success");
+        } else if (msg.type === "COMPLETE") {
+          log(`[TASK COMPLETED] ${msg.reason}`, "success");
+          updateAgentState("IDLE");
+        }
+      };
+
+      ws.onclose = () => {
+        document.getElementById("ws-badge").innerText = "STREAM DISCONNECTED";
+        document.getElementById("ws-badge").style.borderColor = "var(--accent-red)";
+        log("WebSocket disconnected. Reconnecting in 2s...", "warn");
+        setTimeout(connectWebSocket, 2000);
+      };
+    }
+
+    // 2. Interactive Canvas Click Handler
+    canvas.addEventListener("click", (e) => {
+      canvas.focus();
+      let rect = canvas.getBoundingClientRect();
+      let x = (e.clientX - rect.left) / rect.width;
+      let y = (e.clientY - rect.top) / rect.height;
+
+      // Send click coordinates to backend
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: "CANVAS_CLICK",
+          x: x,
+          y: y
+        }));
+      }
+    });
+
+    // 2b. Keyboard Forwarding Handler (for Manual Mode / Login / CAPTCHA)
+    window.addEventListener("keydown", (e) => {
+      // Don't forward if user is typing into our cockpit inputs
+      const activeTag = document.activeElement ? document.activeElement.tagName : "";
+      if (activeTag === "INPUT" || activeTag === "TEXTAREA") return;
+
+      const currentBadge = document.getElementById("agent-state-badge").innerText;
+      if (currentBadge === "MANUAL_CONTROL" || document.activeElement === canvas) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: "CANVAS_KEY",
+            key: e.key,
+            text: e.key.length === 1 ? e.key : null
+          }));
+        }
+      }
+    });
+
+    // 3. Interrupt Resolution Handlers
+    function resolveInterrupt(action) {
+      document.getElementById("interrupt-overlay").style.display = "none";
+      
+      if (action === "HANDOVER") {
+        document.getElementById("manual-banner").style.display = "flex";
+        updateAgentState("MANUAL_CONTROL");
+      }
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: "RESOLVE_INTERRUPT",
+          action: action
+        }));
+      }
+    }
+
+    function resolveReplan() {
+      let val = document.getElementById("replan-input").value.trim();
+      if (!val) return;
+      document.getElementById("interrupt-overlay").style.display = "none";
+      document.getElementById("replan-input").value = "";
+
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: "RESOLVE_INTERRUPT",
+          action: "REPLAN",
+          new_prompt: val
+        }));
+      }
+    }
+
+    function completeManualHandover() {
+      document.getElementById("manual-banner").style.display = "none";
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: "MANUAL_HANDOVER_DONE"
+        }));
+      }
+    }
+
+    // 4. Update Agent State Badge
+    function updateAgentState(state) {
+      let badge = document.getElementById("agent-state-badge");
+      if (!badge) return;
+      badge.innerText = state || "IDLE";
+      badge.className = "p-tag " + (
+        state === "RUNNING" ? "tag-running" : (
+          state === "INTERRUPTED" ? "tag-interrupted" : (
+            state === "MANUAL_CONTROL" ? "tag-manual" : "tag-idle"
+          )
+        )
+      );
+    }
+
+    // 5. User Input Execution
+    async function sendPrompt() {
+      let input = document.getElementById("user-input");
+      let query = input.value.trim();
+      if (!query) return;
+
+      log(`[USER COMMAND] "${query}"`);
+      input.value = "";
+      updateAgentState("RUNNING");
+
+      try {
+        let res = await fetch("/api/execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: query })
+        });
+        let data = await res.json();
+        log(`Protocol Engine Active: ${data.protocol} (${data.reason})`, "success");
+      } catch (err) {
+        log(`Dispatch error: ${err.message}`, "danger");
+      }
+    }
+
+    function handleKey(e) {
+      if (e.key === "Enter") sendPrompt();
+    }
+
+    function triggerScenario(type) {
+      let box = document.getElementById("user-input");
+      if (type === 'live_wiki') box.value = "Navigate to https://en.wikipedia.org and search for Artificial Intelligence";
+      if (type === 'live_hn') box.value = "Navigate to https://news.ycombinator.com";
+      if (type === 'transit') box.value = "Book 2 sleeper berths from Bangalore to Mysore on KSRTC Airavat for tomorrow night";
+      if (type === 'darkpattern') box.value = "Clean checkout mode. Strip all hidden insurance and donation fees";
+      if (type === 'exorcist') box.value = "My GATE application photo is 2.4 MB. Fix it to 30 KB.";
+      sendPrompt();
+    }
+
+    function log(msg, type="normal") {
+      let term = document.getElementById("terminal-logs");
+      let timeStr = new Date().toTimeString().split(' ')[0];
+      let line = document.createElement("div");
+      line.className = "log-line" + (type === "success" ? " log-success" : (type === "warn" ? " log-warn" : (type === "danger" ? " log-danger" : "")));
+      line.innerHTML = `<span class="log-time">[${timeStr}]</span> ${msg}`;
+      term.appendChild(line);
+      term.scrollTop = term.scrollHeight;
+    }
+
+    function clearLogs() {
+      document.getElementById("terminal-logs").innerHTML = "";
+    }
+
+    // Web Speech API Voice Recognition
+    let recognition;
+    function toggleMic() {
+      let btn = document.getElementById("btn-mic");
+      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        alert("Web Speech API is not supported in this browser. Please use Chrome/Edge.");
+        return;
+      }
+      
+      if (!recognition) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.lang = 'en-IN';
+        
+        recognition.onstart = () => {
+          btn.classList.add("listening");
+          log("[MIC ACTIVE] Listening to voice input...");
+        };
+        recognition.onresult = (event) => {
+          let text = event.results[0][0].transcript;
+          document.getElementById("user-input").value = text;
+          btn.classList.remove("listening");
+          log(`[SPEECH RECOGNIZED] "${text}"`, "success");
+          sendPrompt();
+        };
+        recognition.onerror = () => {
+          btn.classList.remove("listening");
+        };
+        recognition.onend = () => {
+          btn.classList.remove("listening");
+        };
+      }
+      
+      recognition.start();
+    }
+
+    // Connect on load
+    window.addEventListener("DOMContentLoaded", connectWebSocket);
+  </script>
+</body>
+</html>
