@@ -46,6 +46,7 @@ class AgentCore:
         self.active_websockets = set()
         self.execution_task = None
         self.action_history = []
+        self.attached_files = []
         self.viewport_size = {"width": 1280, "height": 800}
 
     async def initialize(self):
@@ -137,8 +138,8 @@ class AgentCore:
 
         # If agent is RUNNING -> Trigger Instant Interrupt!
         if self.state == "RUNNING":
-            print("[INTERRUPT] User clicked inside live showcase! Halting autonomous agent immediately...")
-            await self.trigger_user_interrupt()
+            print(f"[INTERRUPT] User clicked website at ({actual_x}, {actual_y})! Halting autonomous agent immediately...")
+            await self.trigger_user_interrupt(actual_x, actual_y)
             return
 
         # If IDLE or MANUAL_CONTROL -> forward click directly to real web page
@@ -187,17 +188,44 @@ class AgentCore:
         except Exception as e:
             print(f"[!] Error forwarding keystroke: {e}")
 
-    async def trigger_user_interrupt(self):
+    async def direct_goto(self, url):
+        """Direct navigation invoked by user entering URL in browser bar."""
+        await self.initialize()
+        if self.page:
+            try:
+                print(f"[DIRECT NAV] Navigating to: {url}")
+                await self.page.goto(url, wait_until="domcontentloaded", timeout=20000)
+                await self.broadcast({
+                    "type": "URL_UPDATE",
+                    "url": self.page.url,
+                    "title": await self.page.title()
+                })
+            except Exception as e:
+                print(f"[!] Direct goto error: {e}")
+
+    async def trigger_user_interrupt(self, x=None, y=None):
         """Puts agent into INTERRUPTED state and notifies frontend."""
         self.state = "INTERRUPTED"
         self.interrupt_event.set()
         self.resume_event.clear()
         
+        curr_title = ""
+        curr_url = ""
+        if self.page:
+            try:
+                curr_title = await self.page.title()
+                curr_url = self.page.url
+            except Exception:
+                pass
+
         await self.broadcast({
             "type": "INTERRUPT_TRIGGERED",
             "state": "INTERRUPTED",
-            "message": "User clicked inside the live showcase. Autonomous execution paused.",
-            "url": self.page.url if self.page else ""
+            "message": "User clicked inside the live website. Autonomous agent paused immediately.",
+            "url": curr_url,
+            "title": curr_title,
+            "current_goal": self.current_goal,
+            "click_coords": {"x": x, "y": y} if x and y else None
         })
 
     async def resolve_interrupt(self, action, new_prompt=None):
@@ -296,13 +324,21 @@ class AgentCore:
                 await self.broadcast({"type": "STEP", "step": step_count, "url": curr_url, "title": curr_title})
 
                 # Check for Human Verification / Login / Payment Gate
-                if any(k in curr_url.lower() for k in ["login", "signin", "checkout", "payment", "captcha"]):
-                    print("[SAFETY TRIGGER] Sensitive portal detected (Login / Payment / CAPTCHA). Pausing for human verification.")
+                is_human_gate = any(k in curr_url.lower() for k in [
+                    "login", "signin", "checkout", "payment", "captcha", "recaptcha", "turnstile", "challenge", "verify", "auth"
+                ]) or any(k in curr_title.lower() for k in [
+                    "login", "sign in", "security check", "captcha", "verification", "one-time password", "otp"
+                ])
+
+                if is_human_gate:
+                    print(f"[SAFETY TRIGGER] Human Verification / Login / CAPTCHA detected on '{curr_title}'. Pausing for user.")
                     self.state = "PAUSED_FOR_HUMAN"
                     await self.broadcast({
-                        "type": "PAYMENT_OR_LOGIN_GATE",
+                        "type": "HUMAN_VERIFICATION_REQUIRED",
                         "state": "PAUSED_FOR_HUMAN",
-                        "message": "Sensitive page detected (Login/Payment/Verification). Please complete directly on canvas."
+                        "url": curr_url,
+                        "title": curr_title,
+                        "message": "Human verification or Login required. Please complete this step directly on the website."
                     })
                     await self.resume_event.wait()
 

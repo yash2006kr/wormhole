@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Wormhole: Real-Time Autonomous Agent Cockpit</title>
+  <title>Wormhole: Embedded Autonomous Agent &amp; Human-in-the-Loop Cockpit</title>
   <style>
     :root {
-      --bg: #0b0f19;
-      --card-bg: #151c2e;
-      --card-border: #23304d;
+      --bg: #070a12;
+      --card-bg: #0f172a;
+      --card-border: #1e293b;
+      --browser-bg: #020617;
       --accent-blue: #0ea5e9;
       --accent-green: #10b981;
       --accent-orange: #f97316;
@@ -16,177 +17,676 @@
       --accent-red: #ef4444;
       --text: #f8fafc;
       --text-muted: #94a3b8;
+      --splitter-width: 8px;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
-    body { background: var(--bg); color: var(--text); padding: 18px; min-height: 100vh; overflow-x: hidden; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 14px 16px; min-height: 100vh; overflow-x: hidden; display: flex; flex-direction: column; }
     
-    .navbar { display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); border: 1px solid var(--card-border); padding: 12px 20px; border-radius: 12px; margin-bottom: 16px; }
-    .brand { font-size: 19px; font-weight: 800; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; color: var(--accent-blue); }
+    /* Top Navbar */
+    .navbar { display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); border: 1px solid var(--card-border); padding: 10px 18px; border-radius: 12px; margin-bottom: 12px; flex-shrink: 0; }
+    .brand { font-size: 18px; font-weight: 800; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; color: var(--accent-blue); }
+    .brand-sub { font-size: 11px; color: var(--text-muted); font-weight: 500; margin-left: 8px; }
+    
+    .nav-controls { display: flex; align-items: center; gap: 10px; }
+    .preset-btn { background: #1e293b; border: 1px solid var(--card-border); color: #cbd5e1; padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer; transition: 0.2s; }
+    .preset-btn:hover { background: #334155; color: white; border-color: var(--accent-blue); }
     .badge-status { background: rgba(16, 185, 129, 0.15); color: var(--accent-green); border: 1px solid var(--accent-green); padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; display: flex; align-items: center; gap: 6px; }
     .badge-status::before { content: ""; width: 7px; height: 7px; background: var(--accent-green); border-radius: 50%; display: inline-block; animation: blink 1.5s infinite; }
     @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-    .grid-layout { display: grid; grid-template-columns: 1fr 1.35fr; gap: 18px; }
-    .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 18px; position: relative; }
-    .card-title { font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
-    
-    /* Input Area */
-    .input-box { display: flex; gap: 8px; margin-bottom: 12px; }
-    input[type="text"] { flex: 1; background: #0f172a; border: 1px solid var(--card-border); border-radius: 8px; padding: 11px 14px; color: white; font-size: 13.5px; outline: none; }
-    input[type="text"]:focus { border-color: var(--accent-blue); }
-    .btn { background: var(--accent-blue); color: white; border: none; padding: 11px 18px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 13px; }
-    .btn:hover { opacity: 0.9; }
-    .btn-mic { background: #1e293b; border: 1px solid var(--card-border); color: #cbd5e1; width: 42px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
-    .btn-mic.listening { background: var(--accent-red); color: white; border-color: var(--accent-red); animation: pulse 1s infinite; }
-    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+    /* Resizable Workspace Layout */
+    .workspace-wrapper { display: flex; flex: 1; min-height: calc(100vh - 80px); gap: 0; position: relative; user-select: none; }
+    .panel { display: flex; flex-direction: column; min-width: 320px; }
+    .left-panel { width: 38%; padding-right: 6px; }
+    .right-panel { width: 62%; padding-left: 6px; min-width: 460px; }
+
+    /* Draggable Splitter */
+    .splitter {
+      width: var(--splitter-width);
+      background: transparent;
+      cursor: col-resize;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+      z-index: 20;
+      position: relative;
+    }
+    .splitter:hover, .splitter.dragging {
+      background: rgba(14, 165, 233, 0.25);
+    }
+    .splitter-handle {
+      width: 4px;
+      height: 48px;
+      border-radius: 2px;
+      background: #334155;
+      transition: 0.2s;
+    }
+    .splitter:hover .splitter-handle, .splitter.dragging .splitter-handle {
+      background: var(--accent-blue);
+      height: 64px;
+    }
+
+    /* Cards */
+    .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; position: relative; }
+    .card-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+
+    /* Attached Files Bar */
+    .attached-files-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+      min-height: 0;
+    }
+    .file-chip {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 11.5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #e2e8f0;
+      animation: fadeIn 0.2s ease-in-out;
+    }
+    .file-chip-thumb {
+      width: 18px;
+      height: 18px;
+      border-radius: 3px;
+      object-fit: cover;
+    }
+    .file-chip-name {
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .file-chip-size {
+      color: #94a3b8;
+      font-size: 10px;
+    }
+    .file-chip-remove {
+      color: #ef4444;
+      cursor: pointer;
+      font-weight: bold;
+      padding: 0 2px;
+    }
+    .file-chip-remove:hover {
+      color: #f87171;
+    }
+
+    /* Prompt Input Bar */
+    .prompt-box {
+      display: flex;
+      gap: 6px;
+      background: #090d16;
+      border: 1px solid var(--card-border);
+      border-radius: 9px;
+      padding: 4px;
+      align-items: center;
+      transition: border-color 0.2s;
+    }
+    .prompt-box.drag-over {
+      border-color: var(--accent-blue);
+      background: #0f1d36;
+    }
+    .prompt-box:focus-within {
+      border-color: var(--accent-blue);
+    }
+    .btn-attach {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      width: 34px;
+      height: 34px;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: 0.2s;
+    }
+    .btn-attach:hover {
+      background: #1e293b;
+      color: white;
+    }
+    input[type="text"].user-prompt-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: white;
+      font-size: 13.5px;
+      outline: none;
+      padding: 6px 4px;
+    }
+    .btn-mic {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      width: 34px;
+      height: 34px;
+      border-radius: 6px;
+      font-size: 15px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: 0.2s;
+    }
+    .btn-mic:hover {
+      background: #1e293b;
+      color: white;
+    }
+    .btn-mic.listening {
+      background: var(--accent-red);
+      color: white;
+      animation: pulse 1s infinite;
+    }
+    .btn-send {
+      background: var(--accent-blue);
+      color: white;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 7px;
+      font-weight: 700;
+      font-size: 12.5px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .btn-send:hover { opacity: 0.9; }
 
     /* Quick Test Chips */
-    .quick-title { font-size: 11px; color: var(--text-muted); font-weight: bold; margin-bottom: 6px; }
-    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
-    .chip { background: #1e293b; border: 1px solid var(--card-border); padding: 6px 10px; border-radius: 7px; font-size: 11.5px; font-weight: 600; cursor: pointer; transition: 0.2s; color: #cbd5e1; }
+    .quick-title { font-size: 11px; color: var(--text-muted); font-weight: bold; margin-bottom: 6px; margin-top: 10px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+    .chip { background: #1e293b; border: 1px solid var(--card-border); padding: 5px 9px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; transition: 0.2s; color: #cbd5e1; }
     .chip:hover { border-color: var(--accent-blue); color: white; background: #243452; }
 
-    /* Protocol Badges */
-    .protocol-indicator { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 9px; background: #0f172a; border: 1px solid var(--card-border); margin-bottom: 12px; }
+    /* Agent Status Pill */
+    .protocol-indicator { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px; background: #070a12; border: 1px solid var(--card-border); margin-bottom: 10px; }
     .p-tag { font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 5px; }
     .tag-idle { background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid #475569; }
     .tag-running { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); border: 1px solid var(--accent-green); }
     .tag-interrupted { background: rgba(239, 68, 68, 0.2); color: var(--accent-red); border: 1px solid var(--accent-red); }
     .tag-manual { background: rgba(249, 115, 22, 0.2); color: var(--accent-orange); border: 1px solid var(--accent-orange); }
 
-    /* Log Stream */
-    .terminal { background: #070a12; border: 1px solid #1e293b; border-radius: 9px; padding: 12px; font-family: 'Consolas', monospace; font-size: 11.5px; height: 280px; overflow-y: auto; color: #a5f3fc; }
-    .log-line { margin-bottom: 4px; line-height: 1.4; }
+    /* Terminal Telemetry */
+    .terminal { background: #04060c; border: 1px solid #1e293b; border-radius: 8px; padding: 10px; font-family: 'Consolas', monospace; font-size: 11px; height: 260px; overflow-y: auto; color: #a5f3fc; flex: 1; }
+    .log-line { margin-bottom: 3px; line-height: 1.4; word-break: break-word; }
     .log-time { color: #64748b; margin-right: 5px; }
     .log-success { color: #4ade80; }
     .log-warn { color: #fbbf24; }
     .log-danger { color: #f87171; }
 
-    /* Interactive Live Screencast Viewport */
-    .viewport-container { position: relative; width: 100%; height: 520px; background: #070a12; border: 1px solid var(--card-border); border-radius: 10px; overflow: hidden; display: flex; align-items: center; justify-content: center; cursor: crosshair; }
-    #screencast-canvas { width: 100%; height: 100%; object-fit: contain; display: block; }
+    /* =========================================================================
+       EMBEDDED BROWSER WINDOW (RIGHT PANEL)
+       ========================================================================= */
+    .browser-window {
+      background: var(--browser-bg);
+      border: 1px solid #334155;
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
     
-    .cursor-hint { position: absolute; top: 10px; left: 10px; background: rgba(15, 23, 42, 0.85); border: 1px solid #334155; padding: 4px 10px; border-radius: 6px; font-size: 11px; color: #94a3b8; pointer-events: none; }
-    .cursor-hint b { color: #38bdf8; }
+    /* Browser Top Chrome */
+    .browser-header {
+      background: #0f172a;
+      border-bottom: 1px solid #1e293b;
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .window-controls { display: flex; gap: 6px; }
+    .dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+    .dot-red { background: #ef4444; }
+    .dot-yellow { background: #f59e0b; }
+    .dot-green { background: #10b981; }
 
-    /* Manual Mode Floating Banner */
-    .manual-banner { display: none; position: absolute; bottom: 12px; left: 12px; right: 12px; background: rgba(249, 115, 22, 0.95); color: white; padding: 10px 16px; border-radius: 8px; font-size: 12px; font-weight: bold; justify-content: space-between; align-items: center; z-index: 10; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-    .btn-manual-done { background: white; color: #c2410c; border: none; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+    .nav-buttons { display: flex; gap: 4px; }
+    .nav-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: #94a3b8;
+      width: 26px;
+      height: 26px;
+      border-radius: 5px;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .nav-btn:hover { background: #1e293b; color: white; border-color: #334155; }
 
-    /* Human-in-the-Loop Interrupt Modal */
-    .interrupt-overlay { display: none; position: absolute; inset: 0; background: rgba(11, 15, 25, 0.85); backdrop-filter: blur(4px); z-index: 50; flex-direction: column; align-items: center; justify-content: center; padding: 25px; text-align: center; border-radius: 10px; }
-    .interrupt-modal { background: #1e293b; border: 2px solid var(--accent-red); border-radius: 12px; padding: 24px; max-width: 480px; width: 100%; box-shadow: 0 10px 30px rgba(239, 68, 68, 0.3); }
-    .modal-title { font-size: 16px; font-weight: bold; color: #f87171; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 8px; }
-    .modal-desc { font-size: 13px; color: #cbd5e1; margin-bottom: 18px; line-height: 1.4; }
-    .modal-actions { display: flex; flex-direction: column; gap: 10px; }
-    .btn-modal-resume { background: var(--accent-green); color: white; border: none; padding: 10px; border-radius: 7px; font-weight: bold; cursor: pointer; }
-    .btn-modal-manual { background: var(--accent-orange); color: white; border: none; padding: 10px; border-radius: 7px; font-weight: bold; cursor: pointer; }
-    .replan-box { display: flex; gap: 6px; margin-top: 8px; }
-    .replan-box input { flex: 1; padding: 8px 10px; font-size: 12px; border-radius: 6px; }
+    /* Address Bar */
+    .address-bar {
+      flex: 1;
+      background: #020617;
+      border: 1px solid #334155;
+      border-radius: 7px;
+      display: flex;
+      align-items: center;
+      padding: 3px 8px;
+      gap: 6px;
+      transition: border-color 0.2s;
+    }
+    .address-bar:focus-within { border-color: var(--accent-blue); }
+    .lock-icon { font-size: 12px; color: var(--accent-green); }
+    .browser-url-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #f1f5f9;
+      font-size: 12px;
+      outline: none;
+      font-family: 'Consolas', monospace;
+    }
+    .btn-go {
+      background: #1e293b;
+      color: #94a3b8;
+      border: 1px solid #334155;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-go:hover { background: var(--accent-blue); color: white; border-color: var(--accent-blue); }
+
+    .browser-status-badge {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-weight: bold;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(14, 165, 233, 0.15);
+      color: var(--accent-blue);
+      border: 1px solid rgba(14, 165, 233, 0.3);
+      white-space: nowrap;
+    }
+    .browser-status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-blue); }
+
+    /* Human Verification / Login Alert Banner */
+    .human-verify-banner {
+      display: none;
+      background: linear-gradient(90deg, #ea580c, #c2410c);
+      color: white;
+      padding: 10px 16px;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid #fdba74;
+      animation: slideDown 0.3s ease-out;
+      z-index: 15;
+    }
+    @keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+    .verify-left { display: flex; align-items: center; gap: 10px; }
+    .verify-icon { font-size: 20px; }
+    .verify-title { font-size: 13px; font-weight: 800; letter-spacing: 0.3px; }
+    .verify-sub { font-size: 11px; color: #ffedd5; }
+    .btn-verify-done {
+      background: #ffffff;
+      color: #9a3412;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      transition: 0.2s;
+    }
+    .btn-verify-done:hover { background: #fef08a; }
+
+    /* Canvas Viewport */
+    .viewport-stage {
+      position: relative;
+      flex: 1;
+      background: #020617;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      cursor: default;
+    }
+    #screencast-canvas {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+      outline: none;
+    }
+
+    /* =========================================================================
+       HUMAN-IN-THE-LOOP CHECKPOINT INTERRUPT MODAL
+       ========================================================================= */
+    .interrupt-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(3, 7, 18, 0.85);
+      backdrop-filter: blur(5px);
+      z-index: 60;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .interrupt-modal {
+      background: #0f172a;
+      border: 2px solid #ef4444;
+      border-radius: 14px;
+      padding: 22px;
+      max-width: 520px;
+      width: 100%;
+      box-shadow: 0 15px 40px rgba(239, 68, 68, 0.35);
+      animation: popIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes popIn {
+      from { transform: scale(0.92); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .interrupt-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .interrupt-badge {
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+      border: 1px solid #ef4444;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .interrupt-title {
+      font-size: 16px;
+      font-weight: 800;
+      color: white;
+    }
+    .interrupt-context {
+      font-size: 12.5px;
+      color: #cbd5e1;
+      margin-bottom: 14px;
+      line-height: 1.4;
+      background: #1e293b;
+      padding: 8px 12px;
+      border-radius: 7px;
+      border: 1px solid #334155;
+    }
+    .interrupt-question {
+      font-size: 13px;
+      color: #f1f5f9;
+      margin-bottom: 8px;
+    }
+    .prompt-redirect-box {
+      margin-bottom: 14px;
+    }
+    textarea.redirect-prompt-input {
+      width: 100%;
+      background: #020617;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 9px 12px;
+      color: white;
+      font-size: 13px;
+      outline: none;
+      resize: vertical;
+      min-height: 60px;
+      box-sizing: border-box;
+      font-family: inherit;
+    }
+    textarea.redirect-prompt-input:focus { border-color: var(--accent-blue); }
+
+    .btn-redirect {
+      width: 100%;
+      background: var(--accent-blue);
+      color: white;
+      border: none;
+      padding: 10px;
+      border-radius: 7px;
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+      margin-top: 6px;
+      transition: 0.2s;
+    }
+    .btn-redirect:hover { opacity: 0.9; }
+
+    .interrupt-divider {
+      position: relative;
+      text-align: center;
+      margin: 14px 0 12px 0;
+    }
+    .interrupt-divider::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 50%;
+      right: 0;
+      height: 1px;
+      background: #334155;
+    }
+    .interrupt-divider span {
+      position: relative;
+      background: #0f172a;
+      padding: 0 10px;
+      font-size: 10.5px;
+      font-weight: bold;
+      color: #64748b;
+      letter-spacing: 0.5px;
+    }
+
+    .interrupt-actions-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .btn-continue {
+      background: #1e293b;
+      color: #4ade80;
+      border: 1px solid #166534;
+      padding: 10px;
+      border-radius: 7px;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .btn-continue:hover { background: #14532d; color: white; }
+
+    .btn-manual {
+      background: #1e293b;
+      color: #fb923c;
+      border: 1px solid #9a3412;
+      padding: 10px;
+      border-radius: 7px;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .btn-manual:hover { background: #7c2d12; color: white; }
   </style>
 </head>
 <body>
 
-  <!-- NAVBAR -->
+  <!-- TOP NAVBAR -->
   <div class="navbar">
     <div class="brand">
-      <span>&#127744;</span> WORMHOLE COCKPIT
-      <span style="font-size: 11px; color: var(--text-muted); font-weight: normal; margin-left: 8px;">Real-Time Autonomous Agent &amp; Human-in-the-Loop Gate</span>
+      <span>🌀</span> WORMHOLE COCKPIT
+      <span class="brand-sub">Real-Time Autonomous Agent &amp; Embedded Browser</span>
     </div>
-    <div class="badge-status" id="ws-badge">CONNECTING TO LIVE STREAM...</div>
+    
+    <div class="nav-controls">
+      <span style="font-size: 11px; color: var(--text-muted);">Layout:</span>
+      <button class="preset-btn" onclick="setLayoutRatio(0.38, 0.62)">Default</button>
+      <button class="preset-btn" onclick="setLayoutRatio(0.25, 0.75)">Wide Browser</button>
+      <button class="preset-btn" onclick="setLayoutRatio(0.50, 0.50)">50:50</button>
+      <div class="badge-status" id="ws-badge">STREAM CONNECTING...</div>
+    </div>
   </div>
 
-  <div class="grid-layout">
-    <!-- LEFT PANEL: JARVIS VOICE HUD -->
-    <div class="card">
-      <div class="card-title">
-        <span>Jarvis Command Interface</span>
-        <span id="active-url" style="font-size: 11px; color: var(--accent-blue); text-transform: none; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Loading...</span>
+  <!-- RESIZABLE WORKSPACE -->
+  <div class="workspace-wrapper" id="workspace">
+
+    <!-- LEFT PANEL: JARVIS AGENT HUD -->
+    <div class="panel left-panel" id="left-panel">
+      
+      <!-- COMMAND & ATTACHMENT CARD -->
+      <div class="card" id="prompt-card">
+        <div class="card-title">
+          <span>Jarvis Command Interface</span>
+          <span style="font-size: 11px; color: var(--accent-blue); text-transform: none;">Multimodal Agentic Gate</span>
+        </div>
+
+        <!-- ATTACHED FILES CHIPS -->
+        <div class="attached-files-container" id="attached-files-container"></div>
+
+        <!-- MULTIMODAL PROMPT BAR -->
+        <div class="prompt-box" id="drop-zone">
+          <button class="btn-attach" onclick="document.getElementById('file-input').click()" title="Attach photos, PDFs, or documents">📎</button>
+          <input type="file" id="file-input" multiple accept="image/*,.pdf,.doc,.docx,.txt,.json,.csv" style="display: none;" onchange="handleFileSelect(event)">
+          
+          <input type="text" class="user-prompt-input" id="user-input" placeholder="Type task or drop files (e.g. 'Search flights', 'Fix photo to 30KB')..." onkeypress="handleKey(event)">
+          
+          <button class="btn-mic" id="btn-mic" onclick="toggleMic()" title="Voice Microphone">🎙️</button>
+          <button class="btn-send" id="btn-send" onclick="sendPrompt()">Execute ➔</button>
+        </div>
+
+        <!-- QUICK TEST SCENARIOS -->
+        <div class="quick-title">QUICK SCENARIOS:</div>
+        <div class="chips">
+          <div class="chip" onclick="triggerScenario('live_wiki')">🌐 Search AI on Wikipedia</div>
+          <div class="chip" onclick="triggerScenario('live_hn')">📰 Open Hacker News</div>
+          <div class="chip" onclick="triggerScenario('transit')">🚌 KSRTC Sleeper Reservation</div>
+          <div class="chip" onclick="triggerScenario('darkpattern')">🛒 Anti-Dark-Pattern Fee Stripper</div>
+          <div class="chip" onclick="triggerScenario('exorcist')">📄 Document Exorcist (32KB Photo)</div>
+        </div>
+
+        <!-- AGENT STATUS BADGE -->
+        <div class="protocol-indicator">
+          <span style="font-size: 11.5px; font-weight: bold;">Status:</span>
+          <span class="p-tag tag-idle" id="agent-state-badge">IDLE</span>
+          <span id="agent-status-text" style="font-size: 11px; color: var(--text-muted); margin-left: auto;">Click website anytime to pause</span>
+        </div>
       </div>
 
-      <!-- INPUT BAR -->
-      <div class="input-box">
-        <input type="text" id="user-input" placeholder="Type or speak: e.g. 'Search flights on Google' or 'Navigate to Wikipedia'..." onkeypress="handleKey(event)">
-        <button class="btn-mic" id="btn-mic" onclick="toggleMic()" title="Voice Microphone">&#127908;</button>
-        <button class="btn" id="btn-send" onclick="sendPrompt()">Execute &rarr;</button>
+      <!-- TERMINAL TELEMETRY -->
+      <div class="card" style="flex: 1; display: flex; flex-direction: column;">
+        <div class="card-title">
+          <span>Agent Telemetry &amp; Protocol Stream</span>
+          <span style="font-size: 11px; cursor: pointer; color: var(--accent-blue);" onclick="clearLogs()">Clear</span>
+        </div>
+        <div class="terminal" id="terminal-logs">
+          <div class="log-line"><span class="log-time">[00:00:00]</span> Wormhole system initialized. Ready.</div>
+        </div>
       </div>
 
-      <!-- QUICK TEST SCENARIOS -->
-      <div class="quick-title">QUICK SCENARIOS (CLICK TO DISPATCH):</div>
-      <div class="chips">
-        <div class="chip" onclick="triggerScenario('live_wiki')">&#127760; Real Web: Search AI on Wikipedia</div>
-        <div class="chip" onclick="triggerScenario('live_hn')">&#128240; Real Web: Open Hacker News</div>
-        <div class="chip" onclick="triggerScenario('transit')">&#128652; KSRTC Sleeper Reservation</div>
-        <div class="chip" onclick="triggerScenario('darkpattern')">&#128722; Anti-Dark-Pattern Fee Stripper</div>
-        <div class="chip" onclick="triggerScenario('exorcist')">&#128196; Document Exorcist (32KB Photo)</div>
-      </div>
-
-      <!-- AGENT STATUS BADGE -->
-      <div class="protocol-indicator">
-        <span style="font-size: 12px; font-weight: bold;">Agent Status:</span>
-        <span class="p-tag tag-idle" id="agent-state-badge">IDLE</span>
-        <span id="agent-status-text" style="font-size: 11.5px; color: var(--text-muted); margin-left: auto;">Click viewport anytime to interrupt</span>
-      </div>
-
-      <!-- TERMINAL LOGS -->
-      <div class="card-title" style="margin-top: 10px;">
-        <span>Real-Time Agentic Telemetry</span>
-        <span style="font-size: 11px; cursor: pointer; color: var(--accent-blue);" onclick="clearLogs()">Clear</span>
-      </div>
-      <div class="terminal" id="terminal-logs">
-        <div class="log-line"><span class="log-time">[00:00:00]</span> Wormhole real-time agent initialized.</div>
-        <div class="log-line"><span class="log-time">[00:00:00]</span> Live CDP WebSocket connecting...</div>
-      </div>
     </div>
 
-    <!-- RIGHT PANEL: INTERACTIVE LIVE VIEWPORT -->
-    <div class="card">
-      <div class="card-title">
-        <span>Live Interactive Viewport (Real Browser Stream)</span>
-        <span style="font-size: 11px; color: var(--accent-green);">&#9679; Low-Latency CDP Screencast</span>
-      </div>
+    <!-- DRAGGABLE SPLITTER -->
+    <div class="splitter" id="splitter" title="Drag left/right to resize">
+      <div class="splitter-handle"></div>
+    </div>
 
-      <div class="viewport-container" id="viewport-container">
-        <!-- Interactive Canvas -->
-        <canvas id="screencast-canvas" width="1280" height="800" tabindex="0" style="outline: none;"></canvas>
-        
-        <div class="cursor-hint" id="cursor-hint">
-          <b>Cursor Active:</b> Click anywhere to trigger <b>Instant Interrupt</b> or interact.
-        </div>
+    <!-- RIGHT PANEL: EMBEDDED REAL BROWSER WINDOW -->
+    <div class="panel right-panel" id="right-panel">
+      <div class="browser-window">
 
-        <!-- Manual Mode Floating Banner -->
-        <div class="manual-banner" id="manual-banner">
-          <span>&#128073; <b>Manual Mode Active:</b> Click/type to log in or solve CAPTCHA directly.</span>
-          <button class="btn-manual-done" onclick="completeManualHandover()">&#10004; Done, Resume Jarvis</button>
-        </div>
+        <!-- BROWSER CHROME HEADER -->
+        <div class="browser-header">
+          <div class="window-controls">
+            <span class="dot dot-red"></span>
+            <span class="dot dot-yellow"></span>
+            <span class="dot dot-green"></span>
+          </div>
 
-        <!-- HUMAN-IN-THE-LOOP INTERRUPT MODAL -->
-        <div class="interrupt-overlay" id="interrupt-overlay">
-          <div class="interrupt-modal">
-            <div class="modal-title">&#9888; AUTONOMOUS AGENT PAUSED</div>
-            <div class="modal-desc" id="interrupt-reason">
-              You clicked inside the live showcase! The agent stopped immediately so you can inspect or redirect it.
-            </div>
-            
-            <div class="modal-actions">
-              <button class="btn-modal-resume" onclick="resolveInterrupt('RESUME')">&#9654; It was by mistake &mdash; Continue Agent</button>
-              <button class="btn-modal-manual" onclick="resolveInterrupt('HANDOVER')">&#128272; I'll handle this manually (Log in / CAPTCHA)</button>
-              
-              <div class="replan-box">
-                <input type="text" id="replan-input" placeholder="Or type new instruction: e.g. 'Click 2nd result'...">
-                <button class="btn" style="padding: 8px 12px; font-size: 12px;" onclick="resolveReplan()">Change &rarr;</button>
-              </div>
-            </div>
+          <div class="nav-buttons">
+            <button class="nav-btn" onclick="directNavigate('back')" title="Back">◀</button>
+            <button class="nav-btn" onclick="directNavigate('forward')" title="Forward">▶</button>
+            <button class="nav-btn" onclick="directNavigate('reload')" title="Reload">🔄</button>
+          </div>
+
+          <div class="address-bar">
+            <span class="lock-icon">🔒</span>
+            <input type="text" class="browser-url-input" id="browser-url-input" placeholder="https://..." onkeypress="handleUrlKey(event)">
+            <button class="btn-go" onclick="submitAddressBarUrl()">Go</button>
+          </div>
+
+          <div class="browser-status-badge" id="browser-status-pill">
+            <span class="browser-status-dot" id="browser-status-dot"></span>
+            <span id="browser-status-text">Live Web</span>
           </div>
         </div>
 
-      </div>
+        <!-- HUMAN VERIFICATION / LOGIN ALERT BANNER -->
+        <div class="human-verify-banner" id="human-verify-banner">
+          <div class="verify-left">
+            <span class="verify-icon">⚠️</span>
+            <div>
+              <div class="verify-title">Human Verification / Login Required</div>
+              <div class="verify-sub" id="verify-sub-text">Please interact directly with the website to log in or complete verification.</div>
+            </div>
+          </div>
+          <button class="btn-verify-done" onclick="completeHumanVerification()">✅ Done, Resume Agent</button>
+        </div>
 
-      <div style="margin-top: 10px; font-size: 11.5px; color: var(--text-muted); display: flex; justify-content: space-between;">
-        <span>Resolution: 1280x800 | Full Bidirectional Pointer Forwarding</span>
-        <span id="fps-counter">CDP Connected</span>
+        <!-- EMBEDDED VIEWPORT STAGE -->
+        <div class="viewport-stage" id="viewport-stage">
+          <canvas id="screencast-canvas" width="1280" height="800" tabindex="0"></canvas>
+
+          <!-- HUMAN-IN-THE-LOOP CHECKPOINT INTERRUPT MODAL -->
+          <div class="interrupt-overlay" id="interrupt-overlay">
+            <div class="interrupt-modal">
+              <div class="interrupt-header">
+                <span class="interrupt-badge">🛑 AGENT PAUSED</span>
+                <span class="interrupt-title">Human Checkpoint Interrupt</span>
+              </div>
+
+              <div class="interrupt-context" id="interrupt-context">
+                You clicked inside the website! Autonomous execution stopped immediately.
+              </div>
+
+              <div class="interrupt-question">
+                <b>Was anything wrong in the agent's work?</b>
+                <span style="font-size: 11.5px; color: #94a3b8; display: block; margin-top: 3px;">
+                  If so, what should the agent do instead?
+                </span>
+              </div>
+
+              <div class="prompt-redirect-box">
+                <textarea class="redirect-prompt-input" id="redirect-prompt-input" placeholder="e.g. 'Click the second result', 'Decline cookies first', 'Go to the contact page'"></textarea>
+                <button class="btn-redirect" onclick="submitInterruptRedirect()">🚀 Apply &amp; Redirect Agent</button>
+              </div>
+
+              <div class="interrupt-divider"><span>OR CHOOSE ACTION</span></div>
+
+              <div class="interrupt-actions-row">
+                <button class="btn-continue" onclick="resolveInterrupt('RESUME')">
+                  ▶ Nothing Wrong &mdash; Just Continue
+                </button>
+                <button class="btn-manual" onclick="resolveInterrupt('HANDOVER')">
+                  👤 Let Me Do It Manually (Login / Form)
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
       </div>
     </div>
+
   </div>
 
   <script>
@@ -194,59 +694,112 @@
     let canvas = document.getElementById("screencast-canvas");
     let ctx = canvas.getContext("2d");
     let currentImage = new Image();
+    let attachedFiles = []; // Holds staged files for upload
 
-    // 1. Establish WebSocket Screencast Connection
+    // =========================================================================
+    // 1. DRAGGABLE SPLITTER RESIZING
+    // =========================================================================
+    const splitter = document.getElementById("splitter");
+    const leftPanel = document.getElementById("left-panel");
+    const rightPanel = document.getElementById("right-panel");
+    const workspace = document.getElementById("workspace");
+    let isDragging = false;
+
+    splitter.addEventListener("mousedown", (e) => {
+      isDragging = true;
+      splitter.classList.add("dragging");
+      document.body.style.cursor = "col-resize";
+    });
+
+    window.addEventListener("mousemove", (e) => {
+      if (!isDragging) return;
+      let containerRect = workspace.getBoundingClientRect();
+      let mouseX = e.clientX - containerRect.left;
+      let totalWidth = containerRect.width;
+
+      let minLeft = 320;
+      let minRight = 460;
+      let maxLeft = totalWidth - minRight;
+
+      if (mouseX >= minLeft && mouseX <= maxLeft) {
+        let leftPct = (mouseX / totalWidth) * 100;
+        let rightPct = 100 - leftPct;
+        leftPanel.style.width = `${leftPct}%`;
+        rightPanel.style.width = `${rightPct}%`;
+      }
+    });
+
+    window.addEventListener("mouseup", () => {
+      if (isDragging) {
+        isDragging = false;
+        splitter.classList.remove("dragging");
+        document.body.style.cursor = "default";
+      }
+    });
+
+    function setLayoutRatio(leftRatio, rightRatio) {
+      leftPanel.style.width = `${leftRatio * 100}%`;
+      rightPanel.style.width = `${rightRatio * 100}%`;
+    }
+
+    // =========================================================================
+    // 2. WEBSOCKET SCREENCAST & BIDIRECTIONAL CONTROL
+    // =========================================================================
     function connectWebSocket() {
       const loc = window.location;
       const wsUri = (loc.protocol === "https:" ? "wss://" : "ws://") + loc.host + "/ws/screencast";
-      
       ws = new WebSocket(wsUri);
-      
+
       ws.onopen = () => {
         document.getElementById("ws-badge").innerText = "LIVE STREAM ACTIVE";
         document.getElementById("ws-badge").style.borderColor = "var(--accent-green)";
-        log("WebSocket connected to Playwright CDP screencast.", "success");
+        log("Connected to embedded Chromium CDP session.", "success");
       };
 
       ws.onmessage = (event) => {
         let msg = JSON.parse(event.data);
-        
-        // Incoming Screencast Frame
+
+        // Frame Stream
         if (msg.type === "FRAME") {
           currentImage.onload = () => {
             ctx.drawImage(currentImage, 0, 0, canvas.width, canvas.height);
           };
           currentImage.src = "data:image/jpeg;base64," + msg.data;
-          
+
           if (msg.url) {
-            document.getElementById("active-url").innerText = msg.url;
+            updateAddressBar(msg.url);
           }
           updateAgentState(msg.state);
         }
 
-        // Interrupt Triggered
+        // Instant Interrupt Triggered
         else if (msg.type === "INTERRUPT_TRIGGERED") {
           updateAgentState("INTERRUPTED");
-          document.getElementById("interrupt-reason").innerText = msg.message;
+          let ctxBox = document.getElementById("interrupt-context");
+          let url = msg.url || "current page";
+          ctxBox.innerText = `You clicked the website while agent was running at: ${url}. The agent paused immediately so you can inspect or redirect it.`;
           document.getElementById("interrupt-overlay").style.display = "flex";
-          log("[INTERRUPT] Agent stopped on user canvas click. Awaiting instructions.", "danger");
+          document.getElementById("redirect-prompt-input").focus();
+          log(`[INTERRUPT TRIGGERED] Autonomous work paused on user website click.`, "danger");
         }
 
-        // Sensitive Page Gate (Login / Payment / CAPTCHA)
-        else if (msg.type === "PAYMENT_OR_LOGIN_GATE") {
+        // Human Verification / Login Gate
+        else if (msg.type === "HUMAN_VERIFICATION_REQUIRED" || msg.type === "PAYMENT_OR_LOGIN_GATE") {
           updateAgentState("PAUSED_FOR_HUMAN");
-          document.getElementById("interrupt-reason").innerText = "Sensitive page detected (Login, Payment, or Verification). Take control to complete safely.";
-          document.getElementById("interrupt-overlay").style.display = "flex";
-          log("[SAFETY GATE] Paused for human login / verification.", "warn");
+          let banner = document.getElementById("human-verify-banner");
+          banner.style.display = "flex";
+          document.getElementById("verify-sub-text").innerText = msg.message || "Sensitive login or verification page detected. Please complete it directly.";
+          log(`[HUMAN GATE] Sensitive page detected (${msg.url}). Please complete login or verification on the website.`, "warn");
         }
 
         // General Logs
         else if (msg.type === "LOG") {
           log(msg.message, "warn");
         } else if (msg.type === "STEP") {
-          log(`[STEP ${msg.step}] URL: ${msg.url} ("${msg.title}")`);
+          log(`[STEP ${msg.step}] ${msg.title} (${msg.url})`);
+          updateAddressBar(msg.url);
         } else if (msg.type === "ACTION") {
-          log(`  -> Action: ${msg.action} (${msg.reason})`, "success");
+          log(`  ➔ Action: ${msg.action} (${msg.reason})`, "success");
         } else if (msg.type === "COMPLETE") {
           log(`[TASK COMPLETED] ${msg.reason}`, "success");
           updateAgentState("IDLE");
@@ -254,21 +807,21 @@
       };
 
       ws.onclose = () => {
-        document.getElementById("ws-badge").innerText = "STREAM DISCONNECTED";
+        document.getElementById("ws-badge").innerText = "STREAM RECONNECTING...";
         document.getElementById("ws-badge").style.borderColor = "var(--accent-red)";
-        log("WebSocket disconnected. Reconnecting in 2s...", "warn");
         setTimeout(connectWebSocket, 2000);
       };
     }
 
-    // 2. Interactive Canvas Click Handler
+    // =========================================================================
+    // 3. INTERACTIVE WEBSITE CLICK & KEYBOARD FORWARDING
+    // =========================================================================
     canvas.addEventListener("click", (e) => {
       canvas.focus();
       let rect = canvas.getBoundingClientRect();
       let x = (e.clientX - rect.left) / rect.width;
       let y = (e.clientY - rect.top) / rect.height;
 
-      // Send click coordinates to backend
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
           type: "CANVAS_CLICK",
@@ -278,14 +831,13 @@
       }
     });
 
-    // 2b. Keyboard Forwarding Handler (for Manual Mode / Login / CAPTCHA)
+    // Keystroke forwarding (active during manual mode or when focused on canvas)
     window.addEventListener("keydown", (e) => {
-      // Don't forward if user is typing into our cockpit inputs
       const activeTag = document.activeElement ? document.activeElement.tagName : "";
       if (activeTag === "INPUT" || activeTag === "TEXTAREA") return;
 
       const currentBadge = document.getElementById("agent-state-badge").innerText;
-      if (currentBadge === "MANUAL_CONTROL" || document.activeElement === canvas) {
+      if (currentBadge === "MANUAL_CONTROL" || currentBadge === "PAUSED_FOR_HUMAN" || document.activeElement === canvas) {
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({
             type: "CANVAS_KEY",
@@ -296,12 +848,15 @@
       }
     });
 
-    // 3. Interrupt Resolution Handlers
+    // =========================================================================
+    // 4. INTERRUPT RESOLUTION HANDLERS
+    // =========================================================================
     function resolveInterrupt(action) {
       document.getElementById("interrupt-overlay").style.display = "none";
-      
+
       if (action === "HANDOVER") {
-        document.getElementById("manual-banner").style.display = "flex";
+        document.getElementById("human-verify-banner").style.display = "flex";
+        document.getElementById("verify-sub-text").innerText = "Manual interaction active. Click and type freely inside the website.";
         updateAgentState("MANUAL_CONTROL");
       }
 
@@ -313,23 +868,29 @@
       }
     }
 
-    function resolveReplan() {
-      let val = document.getElementById("replan-input").value.trim();
-      if (!val) return;
+    function submitInterruptRedirect() {
+      let promptText = document.getElementById("redirect-prompt-input").value.trim();
+      if (!promptText) {
+        alert("Please enter what the agent should do instead, or click 'Nothing Wrong — Just Continue'.");
+        return;
+      }
+
       document.getElementById("interrupt-overlay").style.display = "none";
-      document.getElementById("replan-input").value = "";
+      document.getElementById("redirect-prompt-input").value = "";
+      log(`[USER REDIRECTION] New instruction applied: "${promptText}"`, "success");
 
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
           type: "RESOLVE_INTERRUPT",
           action: "REPLAN",
-          new_prompt: val
+          new_prompt: promptText
         }));
       }
     }
 
-    function completeManualHandover() {
-      document.getElementById("manual-banner").style.display = "none";
+    function completeHumanVerification() {
+      document.getElementById("human-verify-banner").style.display = "none";
+      log("Human verification complete. Resuming autonomous agent...", "success");
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
           type: "MANUAL_HANDOVER_DONE"
@@ -337,45 +898,157 @@
       }
     }
 
-    // 4. Update Agent State Badge
-    function updateAgentState(state) {
-      let badge = document.getElementById("agent-state-badge");
-      if (!badge) return;
-      badge.innerText = state || "IDLE";
-      badge.className = "p-tag " + (
-        state === "RUNNING" ? "tag-running" : (
-          state === "INTERRUPTED" ? "tag-interrupted" : (
-            state === "MANUAL_CONTROL" ? "tag-manual" : "tag-idle"
-          )
-        )
-      );
+    // =========================================================================
+    // 5. FILE & PHOTO ATTACHMENT HANDLING
+    // =========================================================================
+    function handleFileSelect(e) {
+      const files = Array.from(e.target.files);
+      stageFiles(files);
+      e.target.value = "";
     }
 
-    // 5. User Input Execution
-    async function sendPrompt() {
-      let input = document.getElementById("user-input");
-      let query = input.value.trim();
-      if (!query) return;
+    // Drag and Drop files onto input
+    const dropZone = document.getElementById("drop-zone");
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("drag-over");
+    });
+    dropZone.addEventListener("dragleave", () => {
+      dropZone.classList.remove("drag-over");
+    });
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("drag-over");
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        stageFiles(Array.from(e.dataTransfer.files));
+      }
+    });
 
-      log(`[USER COMMAND] "${query}"`);
+    function stageFiles(files) {
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          attachedFiles.push({
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            data: event.target.result,
+            isImage: file.type.startsWith("image/")
+          });
+          renderAttachedFiles();
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function removeAttachedFile(index) {
+      attachedFiles.splice(index, 1);
+      renderAttachedFiles();
+    }
+
+    function renderAttachedFiles() {
+      const container = document.getElementById("attached-files-container");
+      container.innerHTML = "";
+      attachedFiles.forEach((file, idx) => {
+        const chip = document.createElement("div");
+        chip.className = "file-chip";
+
+        let sizeFormatted = file.size > 1048576 
+          ? (file.size / 1048576).toFixed(1) + " MB"
+          : (file.size / 1024).toFixed(1) + " KB";
+
+        chip.innerHTML = `
+          ${file.isImage ? `<img src="${file.data}" class="file-chip-thumb" />` : `<span>📄</span>`}
+          <span class="file-chip-name" title="${file.name}">${file.name}</span>
+          <span class="file-chip-size">(${sizeFormatted})</span>
+          <span class="file-chip-remove" onclick="removeAttachedFile(${idx})" title="Remove">✕</span>
+        `;
+        container.appendChild(chip);
+      });
+    }
+
+    // =========================================================================
+    // 6. PROMPT DISPATCH & EXECUTION
+    // =========================================================================
+    async function sendPrompt() {
+      const input = document.getElementById("user-input");
+      const query = input.value.trim();
+      if (!query && attachedFiles.length === 0) return;
+
+      log(`[USER COMMAND] "${query}" (${attachedFiles.length} file(s) attached)`);
       input.value = "";
       updateAgentState("RUNNING");
 
+      let uploadedPayload = [];
+
+      // If files attached, upload via /api/upload
+      if (attachedFiles.length > 0) {
+        try {
+          log(`Uploading ${attachedFiles.length} attached file(s)...`, "warn");
+          let resUpload = await fetch("/api/upload", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ files: attachedFiles })
+          });
+          let uploadData = await resUpload.json();
+          uploadedPayload = uploadData.files || [];
+          log(`Uploaded ${uploadedPayload.length} file(s) successfully.`, "success");
+          attachedFiles = [];
+          renderAttachedFiles();
+        } catch (e) {
+          log(`File upload error: ${e.message}`, "danger");
+        }
+      }
+
+      // Send execution command
       try {
         let res = await fetch("/api/execute", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt: query })
+          body: JSON.stringify({
+            prompt: query,
+            files: uploadedPayload
+          })
         });
         let data = await res.json();
         log(`Protocol Engine Active: ${data.protocol} (${data.reason})`, "success");
+        if (data.proof_image) {
+          log(`Proof artifact saved: ${data.proof_image}`, "success");
+        }
       } catch (err) {
-        log(`Dispatch error: ${err.message}`, "danger");
+        log(`Execution dispatch error: ${err.message}`, "danger");
       }
     }
 
     function handleKey(e) {
       if (e.key === "Enter") sendPrompt();
+    }
+
+    function handleUrlKey(e) {
+      if (e.key === "Enter") submitAddressBarUrl();
+    }
+
+    async function submitAddressBarUrl() {
+      let urlInput = document.getElementById("browser-url-input");
+      let url = urlInput.value.trim();
+      if (!url) return;
+      log(`Navigating embedded browser to: ${url}`);
+      try {
+        await fetch("/api/navigate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: url })
+        });
+      } catch (e) {
+        log(`Navigation error: ${e.message}`, "danger");
+      }
+    }
+
+    function updateAddressBar(url) {
+      let input = document.getElementById("browser-url-input");
+      if (input && document.activeElement !== input) {
+        input.value = url;
+      }
     }
 
     function triggerScenario(type) {
@@ -386,6 +1059,39 @@
       if (type === 'darkpattern') box.value = "Clean checkout mode. Strip all hidden insurance and donation fees";
       if (type === 'exorcist') box.value = "My GATE application photo is 2.4 MB. Fix it to 30 KB.";
       sendPrompt();
+    }
+
+    function updateAgentState(state) {
+      let badge = document.getElementById("agent-state-badge");
+      let pillText = document.getElementById("browser-status-text");
+      let pillDot = document.getElementById("browser-status-dot");
+
+      if (badge) {
+        badge.innerText = state || "IDLE";
+        badge.className = "p-tag " + (
+          state === "RUNNING" ? "tag-running" : (
+            state === "INTERRUPTED" ? "tag-interrupted" : (
+              state === "MANUAL_CONTROL" ? "tag-manual" : "tag-idle"
+            )
+          )
+        );
+      }
+
+      if (pillText && pillDot) {
+        if (state === "RUNNING") {
+          pillText.innerText = "Agent Executing";
+          pillDot.style.background = "var(--accent-green)";
+        } else if (state === "INTERRUPTED") {
+          pillText.innerText = "Agent Paused";
+          pillDot.style.background = "var(--accent-red)";
+        } else if (state === "MANUAL_CONTROL" || state === "PAUSED_FOR_HUMAN") {
+          pillText.innerText = "Human Mode";
+          pillDot.style.background = "var(--accent-orange)";
+        } else {
+          pillText.innerText = "Live Web";
+          pillDot.style.background = "var(--accent-blue)";
+        }
+      }
     }
 
     function log(msg, type="normal") {
@@ -428,18 +1134,12 @@
           log(`[SPEECH RECOGNIZED] "${text}"`, "success");
           sendPrompt();
         };
-        recognition.onerror = () => {
-          btn.classList.remove("listening");
-        };
-        recognition.onend = () => {
-          btn.classList.remove("listening");
-        };
+        recognition.onerror = () => { btn.classList.remove("listening"); };
+        recognition.onend = () => { btn.classList.remove("listening"); };
       }
-      
       recognition.start();
     }
 
-    // Connect on load
     window.addEventListener("DOMContentLoaded", connectWebSocket);
   </script>
 </body>

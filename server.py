@@ -12,6 +12,7 @@ import os
 import sys
 import json
 import time
+import base64
 import asyncio
 from pathlib import Path
 from dotenv import load_dotenv
@@ -34,6 +35,8 @@ from transit_rush import run_transit_rush
 app = FastAPI(title="Wormhole Real-Time Agent Server")
 
 BASE_DIR = Path(__file__).resolve().parent
+UPLOAD_DIR = BASE_DIR / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
 
 # ==============================================================================
 # LIFECYCLE EVENTS
@@ -122,6 +125,59 @@ async def serve_proof_image(filename: str):
         return FileResponse(file_path)
     return JSONResponse({"error": "Proof not found"}, status_code=404)
 
+@app.get("/uploads/{filename}")
+async def serve_uploaded_file(filename: str):
+    file_path = UPLOAD_DIR / filename
+    if file_path.exists():
+        return FileResponse(file_path)
+    return JSONResponse({"error": "Uploaded file not found"}, status_code=404)
+
+# ==============================================================================
+# FILE UPLOAD API (Accepts Base64 JSON Payload)
+# ==============================================================================
+@app.post("/api/upload")
+async def handle_file_upload(req: Request):
+    try:
+        data = await req.json()
+        files = data.get("files", [])
+        saved_files = []
+        for item in files:
+            name = item.get("name", f"upload_{int(time.time())}.dat")
+            raw_b64 = item.get("data", "")
+            if "," in raw_b64:
+                raw_b64 = raw_b64.split(",", 1)[1]
+            raw_bytes = base64.b64decode(raw_b64)
+            safe_name = name.replace(" ", "_")
+            file_dest = UPLOAD_DIR / safe_name
+            file_dest.write_bytes(raw_bytes)
+            saved_files.append({
+                "name": name,
+                "size": len(raw_bytes),
+                "path": str(file_dest),
+                "url": f"/uploads/{safe_name}"
+            })
+            print(f"[FILE UPLOAD] Saved '{name}' ({len(raw_bytes)} bytes) -> {file_dest}")
+        return JSONResponse({"status": "SUCCESS", "files": saved_files})
+    except Exception as e:
+        print(f"[!] Upload error: {e}")
+        return JSONResponse({"status": "ERROR", "message": str(e)}, status_code=500)
+
+# ==============================================================================
+# EMBEDDED BROWSER ADDRESS BAR NAVIGATION
+# ==============================================================================
+@app.post("/api/navigate")
+async def direct_navigate(req: Request):
+    data = await req.json()
+    url = data.get("url", "").strip()
+    if not url:
+        return JSONResponse({"error": "URL required"}, status_code=400)
+    
+    if not (url.startswith("http://") or url.startswith("https://")):
+        url = "https://" + url
+    
+    await agent_core.direct_goto(url)
+    return JSONResponse({"status": "NAVIGATING", "url": url})
+
 # ==============================================================================
 # AGENTIC EXECUTION API
 # ==============================================================================
@@ -129,12 +185,16 @@ async def serve_proof_image(filename: str):
 async def execute_agent_command(req: Request):
     data = await req.json()
     prompt = data.get("prompt", "").strip()
+    attached_files = data.get("files", [])
     
     if not prompt:
         return JSONResponse({"error": "Empty prompt"}, status_code=400)
     
     t_start = time.time()
-    print(f"\n[AGENT SERVER] Received User Command: \"{prompt}\"")
+    print(f"\n[AGENT SERVER] Received User Command: \"{prompt}\" (Attached Files: {len(attached_files)})")
+
+    # Store attached files in agent core
+    agent_core.attached_files = attached_files
 
     # Detect if user is asking to navigate to a real website
     if any(site in prompt.lower() for site in ["http://", "https://", ".com", ".org", ".in", "google", "wikipedia", "hackernews"]):
@@ -151,7 +211,12 @@ async def execute_agent_command(req: Request):
 
     # Otherwise route to specialized offline/fast protocols
     if "photo" in prompt.lower() or "gate" in prompt.lower() or "kb" in prompt.lower():
+        # Check if user attached their own photo!
         input_test_file = BASE_DIR / "test_oversized_photo.jpg"
+        if attached_files and Path(attached_files[0].get("path", "")).exists():
+            input_test_file = Path(attached_files[0]["path"])
+            print(f"[DOC EXORCIST] Using user uploaded photo: {input_test_file}")
+
         output_file = BASE_DIR / "test_healed_passport_photo.jpg"
         telemetry = await asyncio.to_thread(heal_image, str(input_test_file), str(output_file), 20, 48)
         return {
