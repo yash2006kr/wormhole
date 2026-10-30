@@ -3,18 +3,21 @@ ApplyCopilot (Wormhole) Real-Time Agentic Web Engine
 Features:
 - Live CDP Screencast streaming to WebSockets with Wheel Scrolling & Mouse Movement
 - DOM-Aware Autonomous Reasoning via Groq LPU (openai/gpt-oss-20b)
-- Multi-Input Form Filling (fill_form action for instant contact/job form submission)
+- Multi-Input Form Filling (fill_form action with smart SPA section activation)
 - Document Context Ingestion (extracts text from attached PDFs and credentials from vault)
 - Instant Human-in-the-Loop Interrupt Gate & Emergency Abort
+- Advanced Semantic Web Navigation & Self-Healing Action Fallbacks
 """
 
 import os
 import sys
+import re
 import json
 import time
 import base64
 import asyncio
 from pathlib import Path
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 
 if sys.platform.startswith('win'):
@@ -304,55 +307,177 @@ class AgentCore:
                 print(f"[!] Direct goto error: {e}")
 
     # --------------------------------------------------------------------------
-    # DOM INSPECTOR: EXTRACTS VISIBLE INTERACTIVE ELEMENTS
+    # RICH DOM INSPECTOR: EXTRACTS STRUCTURED CONTEXT & INTERACTIVE ELEMENTS
     # --------------------------------------------------------------------------
     async def _get_interactive_dom_elements(self):
-        """Extracts visible inputs, textareas, buttons, and links to give Groq eyes on the page."""
+        """Extracts structured DOM: headings, navigation tabs, forms, buttons, and alert notices."""
         if not self.page:
             return ""
         try:
             script = """
             (() => {
-                const results = [];
                 const isVisible = (el) => {
-                    return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+                    if (!el) return false;
+                    const style = window.getComputedStyle(el);
+                    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+                    const rect = el.getBoundingClientRect();
+                    return (rect.width > 0 && rect.height > 0) || !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
                 };
 
-                // 1. Inputs and Textareas
-                document.querySelectorAll('input:not([type="hidden"]), textarea, select').forEach(el => {
-                    const id = el.id ? '#' + el.id : '';
-                    const name = el.name ? '[name="' + el.name + '"]' : '';
-                    const type = el.type ? '[type="' + el.type + '"]' : '';
-                    const placeholder = el.placeholder ? 'placeholder="' + el.placeholder.slice(0, 35) + '"' : '';
-                    const vis = isVisible(el) ? 'visible' : 'hidden';
-                    results.push(`INPUT: ${el.tagName.toLowerCase()}${id}${name}${type} ${placeholder} [${vis}]`.trim());
-                });
+                const cleanText = (t) => (t || '').replace(/\\s+/g, ' ').trim().slice(0, 60);
 
-                // 2. Buttons
-                document.querySelectorAll('button, input[type="submit"], [role="button"]').forEach(el => {
-                    const id = el.id ? '#' + el.id : '';
-                    const text = (el.innerText || el.value || '').trim().slice(0, 40);
-                    const vis = isVisible(el) ? 'visible' : 'hidden';
-                    if (text || id) {
-                        results.push(`BUTTON: ${el.tagName.toLowerCase()}${id} text="${text}" [${vis}]`.trim());
+                // 1. Page Title & Headings (to know what page/section is active)
+                const headings = [];
+                document.querySelectorAll('h1, h2, h3').forEach((h, i) => {
+                    if (i < 8) {
+                        const txt = cleanText(h.innerText);
+                        if (txt) headings.push(`${h.tagName}: "${txt}"`);
                     }
                 });
 
-                // 3. Prominent Links / Anchors
-                document.querySelectorAll('a').forEach((el, idx) => {
-                    const text = (el.innerText || '').trim().slice(0, 35);
-                    const href = el.getAttribute('href') || '';
-                    if (text && (href.startsWith('#') || href.includes('connect') || href.includes('contact') || idx < 12)) {
-                        results.push(`LINK: a[href="${href}"] text="${text}"`.trim());
+                // 2. Navigation items (Header links, Nav links, Section tabs, Anchor links)
+                const navItems = [];
+                document.querySelectorAll('nav a, header a, a[href^="#"], [role="tab"], [data-page], [data-section], a.nav-link, a').forEach((el, i) => {
+                    if (navItems.length < 20) {
+                        const txt = cleanText(el.innerText || el.getAttribute('aria-label') || el.getAttribute('title'));
+                        const href = el.getAttribute('href') || el.getAttribute('data-page') || '';
+                        const id = el.id ? '#' + el.id : '';
+                        if (txt && (href.startsWith('#') || href.includes('connect') || href.includes('contact') || href.includes('about') || href.includes('project') || href.includes('apply') || navItems.length < 8)) {
+                            navItems.push(`NAV: a${id}[href="${href}"] text="${txt}" [${isVisible(el) ? 'visible' : 'hidden'}]`);
+                        }
                     }
                 });
-                return results.slice(0, 30).join("\\n");
+
+                // 3. Inputs, Textareas, Selects
+                const formFields = [];
+                document.querySelectorAll('input:not([type="hidden"]), textarea, select').forEach((el, i) => {
+                    if (i < 25) {
+                        const tag = el.tagName.toLowerCase();
+                        const id = el.id ? '#' + el.id : '';
+                        const name = el.name ? `[name="${el.name}"]` : '';
+                        const type = el.type ? `[type="${el.type}"]` : '';
+                        const placeholder = el.placeholder ? `placeholder="${cleanText(el.placeholder)}"` : '';
+                        
+                        let labelText = '';
+                        if (el.id) {
+                            const lbl = document.querySelector(`label[for="${el.id}"]`);
+                            if (lbl) labelText = cleanText(lbl.innerText);
+                        }
+                        if (!labelText && el.closest('label')) {
+                            labelText = cleanText(el.closest('label').innerText);
+                        }
+                        const labelStr = labelText ? `label="${labelText}"` : '';
+                        const vis = isVisible(el) ? 'visible' : 'hidden';
+                        formFields.push(`FIELD: ${tag}${id}${name}${type} ${placeholder} ${labelStr} [${vis}]`.replace(/\\s+/g, ' ').trim());
+                    }
+                });
+
+                // 4. Buttons & Interactive Clickables
+                const buttons = [];
+                document.querySelectorAll('button, input[type="submit"], [role="button"]').forEach((el, i) => {
+                    if (buttons.length < 20) {
+                        const id = el.id ? '#' + el.id : '';
+                        const type = el.type ? `[type="${el.type}"]` : '';
+                        const txt = cleanText(el.innerText || el.value || el.getAttribute('aria-label'));
+                        const vis = isVisible(el) ? 'visible' : 'hidden';
+                        if (txt || id) {
+                            buttons.push(`BUTTON: ${el.tagName.toLowerCase()}${id}${type} text="${txt}" [${vis}]`.trim());
+                        }
+                    }
+                });
+
+                // 5. Active confirmation / Success / Error notices
+                const notices = [];
+                document.querySelectorAll('.alert, .success, .error, [role="alert"], .notification, .toast, .sent-message').forEach(el => {
+                    if (isVisible(el)) {
+                        const txt = cleanText(el.innerText);
+                        if (txt) notices.push(`STATUS_NOTICE: "${txt}"`);
+                    }
+                });
+
+                let output = [];
+                if (headings.length) output.push("=== PAGE HEADINGS ===\\n" + headings.join("\\n"));
+                if (navItems.length) output.push("=== NAVIGATION & SECTION LINKS ===\\n" + navItems.join("\\n"));
+                if (formFields.length) output.push("=== FORM INPUT FIELDS ===\\n" + formFields.join("\\n"));
+                if (buttons.length) output.push("=== BUTTONS & SUBMIT CONTROLS ===\\n" + buttons.join("\\n"));
+                if (notices.length) output.push("=== NOTICES ON PAGE ===\\n" + notices.join("\\n"));
+
+                return output.join("\\n\\n");
             })()
             """
             return await self.page.evaluate(script)
         except Exception as e:
             print(f"[!] DOM extraction error: {e}")
             return ""
+
+    # --------------------------------------------------------------------------
+    # RESILIENT ACTION EXECUTION HELPERS
+    # --------------------------------------------------------------------------
+    async def _smart_click(self, raw_selector, text=None):
+        """Clicks an element using multiple fallback strategies (exact, text, role, JS)."""
+        if not self.page:
+            return False
+
+        clean_sel = raw_selector or ""
+        # Clean Groq pseudoselectors like button: text="..." -> button:has-text("...")
+        if "text=" in clean_sel and not clean_sel.startswith("text="):
+            txt_part = clean_sel.split("text=")[1].strip(" :\"'").replace('"', '')
+            clean_sel = f'button:has-text("{txt_part}"), a:has-text("{txt_part}")'
+
+        # Strategy 1: Standard locator click
+        try:
+            loc = self.page.locator(clean_sel).first
+            if await loc.count() > 0:
+                await loc.scroll_into_view_if_needed(timeout=2500)
+                await loc.click(timeout=4000)
+                return True
+        except Exception:
+            pass
+
+        # Strategy 2: If it's a section anchor link (#connect, #contact)
+        if "#" in clean_sel:
+            hash_target = re.findall(r'#[a-zA-Z0-9_\-]+', clean_sel)
+            if hash_target:
+                tgt = hash_target[0]
+                try:
+                    js_click = f"""
+                    (() => {{
+                        const a = document.querySelector('a[href="{tgt}"], a[data-page="{tgt.replace("#", "")}"]');
+                        if (a) {{ a.click(); return true; }}
+                        const el = document.querySelector('{tgt}');
+                        if (el) {{ el.scrollIntoView({{behavior: "smooth"}}); return true; }}
+                        window.location.hash = '{tgt}';
+                        return true;
+                    }})()
+                    """
+                    success = await self.page.evaluate(js_click)
+                    if success:
+                        return True
+                except Exception:
+                    pass
+
+        # Strategy 3: Text match
+        query_text = text or (clean_sel if not clean_sel.startswith(('.', '#', '[')) else None)
+        if query_text:
+            try:
+                txt_loc = self.page.get_by_text(query_text, exact=False).first
+                if await txt_loc.count() > 0:
+                    await txt_loc.scroll_into_view_if_needed(timeout=2500)
+                    await txt_loc.click(timeout=3000, force=True)
+                    return True
+            except Exception:
+                pass
+
+        # Strategy 4: Force click on locator
+        try:
+            loc = self.page.locator(clean_sel).first
+            if await loc.count() > 0:
+                await loc.click(force=True, timeout=2000)
+                return True
+        except Exception:
+            pass
+
+        return False
 
     # --------------------------------------------------------------------------
     # AUTONOMOUS AGENTIC EXECUTION LOOP
@@ -366,6 +491,24 @@ class AgentCore:
         self.action_history = []
         self.interrupt_event.clear()
         self.resume_event.clear()
+
+        # PRE-CHECK: If goal contains an explicit URL, navigate directly before entering the loop!
+        found_urls = re.findall(r'https?://[^\s<>"\',;]+', goal)
+        if found_urls and self.page:
+            target_initial_url = found_urls[0].rstrip('.,;')
+            try:
+                target_host = urlparse(target_initial_url).netloc
+                curr_host = urlparse(self.page.url or "").netloc
+                if target_host and target_host != curr_host:
+                    print(f"[AGENT CORE] Initial URL detected in goal: {target_initial_url}. Navigating directly...")
+                    await self.broadcast({
+                        "type": "LOG",
+                        "message": f"Directly navigating to target website specified in prompt: {target_initial_url}"
+                    })
+                    await self.page.goto(target_initial_url, wait_until="domcontentloaded", timeout=25000)
+                    await asyncio.sleep(1.5)
+            except Exception as e:
+                print(f"[!] Initial navigation error: {e}")
         
         if self.execution_task and not self.execution_task.done():
             self.execution_task.cancel()
@@ -390,6 +533,8 @@ class AgentCore:
 
             max_steps = 10
             step_count = 0
+            prev_action_key = None
+            repeat_action_count = 0
 
             while step_count < max_steps and self.state in ["RUNNING", "INTERRUPTED", "MANUAL_CONTROL"]:
                 # Check for Interrupt Gate
@@ -436,6 +581,19 @@ class AgentCore:
                 text_val = action.get("text", "")
                 reason = action.get("reason", "")
 
+                # Loop prevention
+                current_action_key = f"{action_type}:{selector}:{text_val}"
+                if current_action_key == prev_action_key:
+                    repeat_action_count += 1
+                    if repeat_action_count >= 2:
+                        print(f"[!] Repetitive loop detected on '{current_action_key}'. Forcing fallback scroll...")
+                        action_type = "scroll"
+                        reason = "Bypassing loop: scrolling down to discover interactive elements."
+                        repeat_action_count = 0
+                else:
+                    repeat_action_count = 0
+                prev_action_key = current_action_key
+
                 await self.broadcast({
                     "type": "ACTION",
                     "action": action_type,
@@ -467,78 +625,117 @@ class AgentCore:
                     elif action_type == "fill_form":
                         fields = action.get("fields", {})
 
-                        # Check if any field is not visible and page has a #connect or #contact link to activate the section
+                        # 1. Activate SPA Section if fields are hidden
                         first_sel = next(iter(fields.keys()), "")
                         if first_sel:
                             try:
                                 is_vis = await self.page.locator(first_sel).first.is_visible()
                                 if not is_vis:
-                                    print(f"  -> Field '{first_sel}' not visible. Checking for section link...")
-                                    for nav_sel in ["a[href='#connect']", "a[href='#contact']", "a[data-page='connect']", "text=Initiate Contact", "text=Connect"]:
-                                        if await self.page.locator(nav_sel).count() > 0:
-                                            print(f"  -> Clicking section link: {nav_sel}")
-                                            await self.page.locator(nav_sel).first.click()
-                                            await asyncio.sleep(1.0)
+                                    print(f"  -> Field '{first_sel}' hidden. Triggering section navigation...")
+                                    for nav_sel in ["a[href='#connect']", "a[href='#contact']", "a[data-page='connect']", "text=Connect", "text=Contact", "text=Initiate Contact"]:
+                                        if await self._smart_click(nav_sel):
+                                            print(f"  -> Section navigated via '{nav_sel}'")
+                                            await asyncio.sleep(1.2)
                                             break
                             except Exception:
                                 pass
 
+                        # 2. Fill each input field with robust fallbacks
                         for f_sel, f_val in fields.items():
+                            val_str = str(f_val)
+                            print(f"  -> Filling field '{f_sel}' with: {val_str[:35]}...")
+                            filled = False
+                            
+                            # Try primary selector
                             try:
-                                print(f"  -> Filling field '{f_sel}' with: {str(f_val)[:35]}...")
                                 loc = self.page.locator(f_sel).first
-                                await loc.scroll_into_view_if_needed(timeout=3000)
-                                await loc.fill(str(f_val), timeout=4000)
-                                await asyncio.sleep(0.3)
-                            except Exception as fe:
-                                print(f"  [!] Fill error on {f_sel}: {fe}")
+                                if await loc.count() > 0:
+                                    await loc.scroll_into_view_if_needed(timeout=2500)
+                                    await loc.fill(val_str, timeout=3000)
+                                    filled = True
+                            except Exception:
+                                pass
 
-                        submit_sel = action.get("submit_selector")
-                        if submit_sel:
-                            try:
-                                clean_sel = submit_sel
-                                if "text=" in clean_sel and not clean_sel.startswith("text="):
-                                    txt_part = clean_sel.split("text=")[1].strip(" :\"'").replace('"', '')
-                                    clean_sel = f'button:has-text("{txt_part}"), button[type="submit"], input[type="submit"]'
-                                print(f"  -> Clicking form submit: {clean_sel}")
-                                btn_loc = self.page.locator(clean_sel).first
-                                await btn_loc.scroll_into_view_if_needed(timeout=3000)
-                                await btn_loc.click(timeout=5000)
-                                await asyncio.sleep(1.5)
-                            except Exception as se:
-                                print(f"  [!] Submit click error: {se}")
+                            # Heuristic Fallback based on field intent
+                            if not filled:
+                                f_lower = f_sel.lower()
+                                fallback_candidates = []
+                                if "name" in f_lower:
+                                    fallback_candidates = ["#form-name", "input[name='name']", "input[placeholder*='name' i]", "input[type='text']"]
+                                elif "email" in f_lower:
+                                    fallback_candidates = ["#form-email", "input[type='email']", "input[name='email']", "input[placeholder*='email' i]"]
+                                elif "message" in f_lower or "comment" in f_lower or "body" in f_lower:
+                                    fallback_candidates = ["#form-message", "textarea[name='message']", "textarea", "textarea[placeholder*='message' i]"]
+
+                                for cand in fallback_candidates:
+                                    try:
+                                        loc = self.page.locator(cand).first
+                                        if await loc.count() > 0:
+                                            await loc.scroll_into_view_if_needed(timeout=2000)
+                                            await loc.fill(val_str, timeout=3000)
+                                            filled = True
+                                            print(f"     [Fallback Success] Field filled via candidate '{cand}'")
+                                            break
+                                    except Exception:
+                                        continue
+
+                            await asyncio.sleep(0.3)
+
+                        # 3. Submit form
+                        submit_sel = action.get("submit_selector") or "button[type='submit'], input[type='submit']"
+                        print(f"  -> Submitting form: {submit_sel}")
+                        submitted = await self._smart_click(submit_sel)
+                        if not submitted:
+                            # Try submit button fallbacks
+                            for s_cand in ["button:has-text('Send Message')", "button:has-text('Send')", "button:has-text('Submit')", "button[type='submit']"]:
+                                if await self._smart_click(s_cand):
+                                    submitted = True
+                                    break
+                        
+                        await asyncio.sleep(2.0)
 
                         if action.get("finish_after", True):
                             print(f"  -> Form Complete: {reason}")
-                            await self.broadcast({"type": "COMPLETE", "reason": reason})
+                            await self.broadcast({"type": "COMPLETE", "reason": f"Form submitted: {reason}"})
                             break
 
                     elif action_type == "type":
                         target_selector = selector or "input, textarea"
                         print(f"  -> Typing '{text_val}' into: {target_selector}")
-                        loc = self.page.locator(target_selector).first
-                        await loc.scroll_into_view_if_needed(timeout=3000)
-                        await loc.fill(text_val, timeout=5000)
-                        if action.get("press_enter"):
-                            await loc.press("Enter")
+                        typed = False
+                        try:
+                            loc = self.page.locator(target_selector).first
+                            await loc.scroll_into_view_if_needed(timeout=3000)
+                            await loc.fill(text_val, timeout=5000)
+                            if action.get("press_enter"):
+                                await loc.press("Enter")
+                            typed = True
+                        except Exception:
+                            pass
+
+                        if not typed:
+                            # Try first visible input
+                            try:
+                                loc = self.page.locator("input[type='text'], input[type='search'], textarea").first
+                                await loc.fill(text_val, timeout=4000)
+                                if action.get("press_enter"):
+                                    await loc.press("Enter")
+                            except Exception as te:
+                                print(f"  [!] Type fallback error: {te}")
                         await asyncio.sleep(1)
 
                     elif action_type == "click":
                         raw_sel = selector or text_val
-                        clean_sel = raw_sel
-                        if "text=" in clean_sel and not clean_sel.startswith("text="):
-                            txt_part = clean_sel.split("text=")[1].strip(" :\"'").replace('"', '')
-                            clean_sel = f'button:has-text("{txt_part}"), a:has-text("{txt_part}")'
-                        print(f"  -> Clicking element: {clean_sel}")
-                        loc = self.page.locator(clean_sel).first
-                        await loc.scroll_into_view_if_needed(timeout=3000)
-                        await loc.click(timeout=5000)
+                        print(f"  -> Clicking element: {raw_sel}")
+                        clicked = await self._smart_click(raw_sel, text=text_val)
+                        if not clicked:
+                            print(f"  [!] Primary click failed on '{raw_sel}'. Trying anchor/text fallback...")
                         await asyncio.sleep(1.5)
 
                     elif action_type == "scroll":
                         print("  -> Scrolling down page...")
                         await self.page.evaluate("window.scrollBy(0, 600)")
-                        await asyncio.sleep(0.5)
+                        await asyncio.sleep(0.8)
 
                     elif action_type == "finish":
                         print(f"  -> Task Complete: {reason}")
@@ -566,7 +763,7 @@ class AgentCore:
             self.state = "IDLE"
 
     async def _decide_next_action(self, goal, curr_url, curr_title, dom_elements="", context_info=""):
-        """Queries Groq LPU with DOM context and user document credentials."""
+        """Queries Groq LPU with cognitive policy, DOM context, and user document credentials."""
         # Fast rule-based heuristics for search engines
         if ("google.com" in curr_url or "bing.com" in curr_url) and "search" in goal.lower():
             return {
@@ -578,24 +775,42 @@ class AgentCore:
             }
 
         sys_prompt = (
-            "You are an autonomous web agent executing actions on real websites.\n"
-            "Given the user's goal, user/document credentials, current URL, page title, and interactive DOM elements, decide the next action in JSON.\n\n"
-            "Supported Action Types:\n"
-            "1. fill_form: Use when contact forms, inquiry forms, or inputs exist on page.\n"
-            "   Format: {\"action\": \"fill_form\", \"fields\": {\"css_or_id\": \"value_to_fill\", ...}, \"submit_selector\": \"button_css_or_text\", \"finish_after\": true, \"reason\": \"...\"}\n"
-            "2. navigate: {\"action\": \"navigate\", \"text\": \"https://...\", \"reason\": \"...\"}\n"
-            "3. click: {\"action\": \"click\", \"selector\": \"css_selector or text=ExactText\", \"reason\": \"...\"}\n"
-            "4. type: {\"action\": \"type\", \"selector\": \"input_selector\", \"text\": \"string\", \"press_enter\": false, \"reason\": \"...\"}\n"
-            "5. scroll: {\"action\": \"scroll\", \"reason\": \"Scroll down to find form or content\"}\n"
-            "6. finish: {\"action\": \"finish\", \"reason\": \"Task completed successfully\"}\n\n"
-            "Always prefer fill_form when submitting forms. Ensure selectors match the visible DOM elements provided."
+            "You are Jarvis-Wormhole, an elite autonomous web navigation and form-filling agent.\n"
+            "Your objective is to examine the web page, understand the user's intent, and execute the exact right sequence of browser actions to achieve the goal without getting stuck or lost.\n\n"
+            "=== COGNITIVE REASONING POLICY ===\n"
+            "1. UNDERSTAND THE USER'S GOAL:\n"
+            "   - Identify what the user wants to accomplish (e.g. 'send a message to the guy', 'search for AI', 'fill out application', 'contact developer').\n"
+            "2. LOCATE WHERE TO GO ON THE WEBSITE:\n"
+            "   - Inspect '=== NAVIGATION & SECTION LINKS ===' and '=== PAGE HEADINGS ==='.\n"
+            "   - If the user wants to send a message / connect / contact:\n"
+            "     * Look for links or buttons labeled 'Connect', 'Contact', 'Initiate Contact', 'Get in Touch', 'Hire Me', 'Message', or href='#connect' / href='#contact'.\n"
+            "     * Single Page Applications (SPAs) keep forms hidden in sections until the section navigation tab is clicked.\n"
+            "   - If input fields are present (even if marked [hidden] in an SPA), use action 'fill_form'. It automatically navigates to and activates the section!\n"
+            "3. FORM FILLING PROTOCOL (action: 'fill_form'):\n"
+            "   - Match the user's attached document / vault profile to the inputs:\n"
+            "     * Name field -> use applicant/user's full name\n"
+            "     * Email field -> use applicant/user's email address\n"
+            "     * Message/Inquiry field -> write a concise, professional message introducing the user and expressing interest to connect or collaborate\n"
+            "   - Specify the submit button (e.g. 'button[type=\"submit\"]' or 'button:has-text(\"Send Message\")').\n"
+            "   - Set 'finish_after': true so the task finishes upon successful submission.\n"
+            "4. LOOP & STUCK PREVENTION:\n"
+            "   - If you already navigated to the section, proceed to fill the form.\n"
+            "   - If a success notice appears in '=== NOTICES ON PAGE ===' or the form was submitted, output 'finish'.\n\n"
+            "=== SUPPORTED ACTIONS (JSON) ===\n"
+            "1. fill_form: {\"action\": \"fill_form\", \"fields\": {\"#form-name\": \"Name\", \"#form-email\": \"email@domain.com\", \"#form-message\": \"Message text...\"}, \"submit_selector\": \"button[type='submit']\", \"finish_after\": true, \"reason\": \"...\"}\n"
+            "2. click: {\"action\": \"click\", \"selector\": \"a[href='#connect']\", \"reason\": \"Opening the Connect section to access the message form.\"}\n"
+            "3. type: {\"action\": \"type\", \"selector\": \"input[name='q']\", \"text\": \"Query\", \"press_enter\": true, \"reason\": \"...\"}\n"
+            "4. navigate: {\"action\": \"navigate\", \"text\": \"https://...\", \"reason\": \"Navigating to website.\"}\n"
+            "5. scroll: {\"action\": \"scroll\", \"reason\": \"Scrolling to find content below the fold.\"}\n"
+            "6. finish: {\"action\": \"finish\", \"reason\": \"Task successfully completed.\"}\n\n"
+            "Always return valid JSON only."
         )
 
         user_msg = (
             f"User Goal: {goal}\n\n"
             f"Attached Document / Candidate Data:\n{context_info}\n\n"
             f"Current Web Page: {curr_url} ('{curr_title}')\n\n"
-            f"Visible Interactive DOM Elements:\n{dom_elements}\n"
+            f"Structured DOM Elements on Page:\n{dom_elements}\n"
         )
 
         try:

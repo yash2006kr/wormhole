@@ -20,11 +20,12 @@
       --splitter-width: 8px;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-    body { background: var(--bg); color: var(--text); padding: 12px 16px; min-height: 100vh; overflow-x: hidden; display: flex; flex-direction: column; }
+    html, body { height: 100vh; max-height: 100vh; overflow: hidden; }
+    body { background: var(--bg); color: var(--text); padding: 10px 14px; display: flex; flex-direction: column; }
     
     /* Top Navbar */
-    .navbar { display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); border: 1px solid var(--card-border); padding: 9px 18px; border-radius: 12px; margin-bottom: 12px; flex-shrink: 0; }
-    .brand { font-size: 18px; font-weight: 800; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; color: var(--accent-blue); }
+    .navbar { display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); border: 1px solid var(--card-border); padding: 8px 16px; border-radius: 10px; margin-bottom: 8px; flex-shrink: 0; }
+    .brand { font-size: 17px; font-weight: 800; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; color: var(--accent-blue); }
     .brand-sub { font-size: 11px; color: var(--text-muted); font-weight: 500; margin-left: 8px; }
     
     .nav-controls { display: flex; align-items: center; gap: 8px; }
@@ -35,8 +36,8 @@
     @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
     /* Resizable Workspace Layout */
-    .workspace-wrapper { display: flex; flex: 1; min-height: calc(100vh - 78px); gap: 0; position: relative; user-select: none; }
-    .panel { display: flex; flex-direction: column; min-width: 320px; }
+    .workspace-wrapper { display: flex; flex: 1; min-height: 0; height: calc(100vh - 66px); max-height: calc(100vh - 66px); gap: 0; position: relative; user-select: none; overflow: hidden; }
+    .panel { display: flex; flex-direction: column; min-width: 320px; height: 100%; min-height: 0; max-height: 100%; overflow: hidden; }
     .left-panel { width: 38%; padding-right: 6px; }
     .right-panel { width: 62%; padding-left: 6px; min-width: 460px; }
 
@@ -212,13 +213,13 @@
     }
 
     /* Quick Test Chips */
-    .quick-title { font-size: 11px; color: var(--text-muted); font-weight: bold; margin-bottom: 5px; margin-top: 10px; }
-    .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
-    .chip { background: #1e293b; border: 1px solid var(--card-border); padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; transition: 0.2s; color: #cbd5e1; }
+    .quick-title { font-size: 10.5px; color: var(--text-muted); font-weight: bold; margin-bottom: 4px; margin-top: 8px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; max-height: 52px; overflow-y: auto; }
+    .chip { background: #1e293b; border: 1px solid var(--card-border); padding: 3px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 600; cursor: pointer; transition: 0.2s; color: #cbd5e1; }
     .chip:hover { border-color: var(--accent-blue); color: white; background: #243452; }
 
     /* Agent Status Pill */
-    .protocol-indicator { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 8px; background: #070a12; border: 1px solid var(--card-border); margin-bottom: 10px; }
+    .protocol-indicator { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 7px; background: #070a12; border: 1px solid var(--card-border); margin-bottom: 0; }
     .p-tag { font-size: 11px; font-weight: bold; padding: 2px 7px; border-radius: 5px; }
     .tag-idle { background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid #475569; }
     .tag-running { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); border: 1px solid var(--accent-green); }
@@ -226,7 +227,35 @@
     .tag-manual { background: rgba(249, 115, 22, 0.2); color: var(--accent-orange); border: 1px solid var(--accent-orange); }
 
     /* Terminal Telemetry */
-    .terminal { background: #04060c; border: 1px solid #1e293b; border-radius: 8px; padding: 10px; font-family: 'Consolas', monospace; font-size: 11px; height: 260px; overflow-y: auto; color: #a5f3fc; flex: 1; }
+    .telemetry-card {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      margin-bottom: 0 !important;
+      padding: 12px 14px;
+    }
+    .terminal {
+      background: #04060c;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-family: 'Consolas', 'Fira Code', monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      flex: 1;
+      min-height: 0;
+      height: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
+      color: #a5f3fc;
+      scroll-behavior: smooth;
+    }
+    .terminal::-webkit-scrollbar { width: 6px; }
+    .terminal::-webkit-scrollbar-track { background: #020617; border-radius: 3px; }
+    .terminal::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    .terminal::-webkit-scrollbar-thumb:hover { background: var(--accent-blue); }
     .log-line { margin-bottom: 3px; line-height: 1.4; word-break: break-word; }
     .log-time { color: #64748b; margin-right: 5px; }
     .log-success { color: #4ade80; }
@@ -244,6 +273,8 @@
       display: flex;
       flex-direction: column;
       flex: 1;
+      height: 100%;
+      min-height: 0;
       box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     }
     
@@ -577,7 +608,7 @@
     <div class="panel left-panel" id="left-panel">
       
       <!-- COMMAND & ATTACHMENT CARD -->
-      <div class="card" id="prompt-card">
+      <div class="card" id="prompt-card" style="flex-shrink: 0; margin-bottom: 8px;">
         <div class="card-title">
           <span>Jarvis Command Interface</span>
           <button class="btn-stop-sm" onclick="abortAgent()" title="Emergency halt active task">🛑 Stop Agent</button>
@@ -616,13 +647,16 @@
         </div>
       </div>
 
-      <!-- TERMINAL TELEMETRY -->
-      <div class="card" style="flex: 1; display: flex; flex-direction: column;">
+      <!-- TERMINAL TELEMETRY (FIXED SIZE WITH INTERNAL CHAT-STYLE SCROLL) -->
+      <div class="card telemetry-card">
         <div class="card-title">
-          <span>Agent Telemetry Stream</span>
-          <div style="display: flex; gap: 8px;">
-            <button class="btn-stop-sm" onclick="abortAgent()">🛑 Stop Loop</button>
-            <span style="font-size: 11px; cursor: pointer; color: var(--accent-blue); padding-top: 2px;" onclick="clearLogs()">Clear</span>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green);"></span>
+            <span>Agent Telemetry Stream</span>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="btn-stop-sm" onclick="abortAgent()" title="Halt current loop">🛑 Stop Loop</button>
+            <span style="font-size: 11px; cursor: pointer; color: var(--accent-blue);" onclick="clearLogs()">Clear</span>
           </div>
         </div>
         <div class="terminal" id="terminal-logs">
@@ -1220,12 +1254,20 @@
 
     function log(msg, type="normal") {
       let term = document.getElementById("terminal-logs");
+      if (!term) return;
       let timeStr = new Date().toTimeString().split(' ')[0];
       let line = document.createElement("div");
       line.className = "log-line" + (type === "success" ? " log-success" : (type === "warn" ? " log-warn" : (type === "danger" ? " log-danger" : "")));
       line.innerHTML = `<span class="log-time">[${timeStr}]</span> ${msg}`;
+      
+      // Check if user is already reading near bottom (within 70px)
+      const isNearBottom = (term.scrollHeight - term.scrollTop - term.clientHeight) < 70;
       term.appendChild(line);
-      term.scrollTop = term.scrollHeight;
+      
+      // Smoothly scroll down like modern chat interfaces
+      if (isNearBottom) {
+        term.scrollTop = term.scrollHeight;
+      }
     }
 
     function clearLogs() {
