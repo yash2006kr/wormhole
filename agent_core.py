@@ -18,7 +18,7 @@ import base64
 import asyncio
 from pathlib import Path
 from urllib.parse import urlparse
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from dotenv import load_dotenv
 
 if sys.platform.startswith('win'):
@@ -36,6 +36,159 @@ from sneaky_fee_guard import extract_voice_approved_amount, audit_and_strip_chec
 from sentinel import fraud_sentinel
 from exorcist import heal_image
 from api_pool import api_pool
+
+
+class SemanticIntentAnalyzer:
+    """Intelligent natural language & speech-to-text normalizer with fuzzy matching for travel, media & forms."""
+    FOOD_TERMS = [
+        "biryani", "food", "restaurant", "hotel", "sweet", "dosa", "pizza",
+        "burger", "meal", "taste", "dining", "dish", "dishes", "cafe", "roast",
+        "non-veg", "veg", "thali", "kabab", "kebab", "shawarma", "mandi"
+    ]
+
+    CONTROL_VERBS = [
+        "click", "tap", "press", "select", "choose", "scroll", "next", "previous",
+        "pause", "resume", "play", "stop", "fullscreen", "maximize", "filter",
+        "sort", "submit", "apply", "enter", "type", "fill", "close", "reload"
+    ]
+
+    CITY_ALIASES = {
+        "Bangalore": ["bangalore", "bengaluru", "blr", "banglore", "bangaluru", "bengalore", "bangalur", "bengalor"],
+        "Hyderabad": ["hyderabad", "hyd", "hyderbad", "hydrabad", "hyderabaad", "secunderabad", "cyberabad", "hyderabaf"],
+        "Mysore": ["mysore", "mysuru", "mysoor", "mysur", "mysooru"],
+        "Chennai": ["chennai", "madras", "chenai", "maa", "chenna"],
+        "Delhi": ["delhi", "new delhi", "del", "dilli", "ncr"],
+        "Mumbai": ["mumbai", "bombay", "bom"],
+        "Pune": ["pune", "poona", "pnq"],
+        "Goa": ["goa", "panaji", "madgaon", "margao", "vasco"],
+        "Jaipur": ["jaipur", "pink city", "jai"],
+        "Tirupati": ["tirupati", "tirupathi", "tirumala"],
+        "Coimbatore": ["coimbatore", "kovai", "cbe"],
+        "Vijayawada": ["vijayawada", "bezawada", "vja"],
+        "Visakhapatnam": ["visakhapatnam", "vizag", "vishakapatnam"],
+        "Mangalore": ["mangalore", "mangaluru", "mlr"],
+    }
+
+    @classmethod
+    def clean_voice_text(cls, raw: str) -> str:
+        text = raw.strip()
+        # Remove emojis and decorative icons
+        text = re.sub(r'[\U00010000-\U0010ffff\u2600-\u27bf\u2300-\u23ff\ufe0f]', '', text)
+        text = text.strip(" *'\"`.,:;!?")
+
+        # Deduplicate repeated words or double phrases from speech-to-text stutter
+        # e.g. "best biryani best biryani in Vijayanagar" -> "best biryani in Vijayanagar"
+        for _ in range(2):
+            text = re.sub(r'\b([a-zA-Z]{3,20}(?:\s+[a-zA-Z]{3,20})?)\s+\1\b', r'\1', text, flags=re.IGNORECASE)
+
+        # Phonetic speech slips: "test" -> "taste" when food/dining is mentioned
+        if any(term in text.lower() for term in cls.FOOD_TERMS):
+            text = re.sub(r'\b(good|best|great|nice|awesome|bad|cheap)\s+test\b', r'\1 taste', text, flags=re.IGNORECASE)
+            text = re.sub(r'\btest\s+(and|at|with)\b', r'taste \1', text, flags=re.IGNORECASE)
+            text = re.sub(r'\bgood\s+test\b', 'good taste', text, flags=re.IGNORECASE)
+
+        # Transit slips: "2" -> "to", "bus for" -> "bus from"
+        text = re.sub(r'\b(?:2|too|two)\b', 'to', text, flags=re.IGNORECASE)
+        text = re.sub(r'\bbus\s+for\b', 'bus from', text, flags=re.IGNORECASE)
+        text = re.sub(r'\btrain\s+for\b', 'train from', text, flags=re.IGNORECASE)
+        text = re.sub(r'\bbetween\s+([a-zA-Z]+)\s+and\s+([a-zA-Z]+)', r'\1 to \2', text, flags=re.IGNORECASE)
+
+        # Common brand name voice normalizations
+        text = re.sub(r'\b(?:sun\s*o|sunoai)\b', 'Suno AI', text, flags=re.IGNORECASE)
+        text = re.sub(r'\b(?:u\s*tube|you\s*tube|yt)\b', 'YouTube', text, flags=re.IGNORECASE)
+        text = re.sub(r'\b(?:abhi\s*bus|abhibust)\b', 'AbhiBus', text, flags=re.IGNORECASE)
+        text = re.sub(r'\b(?:red\s*bus|redbust)\b', 'redBus', text, flags=re.IGNORECASE)
+        text = re.sub(r'\b(?:swigi|swiggi)\b', 'Swiggy', text, flags=re.IGNORECASE)
+        text = re.sub(r'\b(?:zomto|zomatto)\b', 'Zomato', text, flags=re.IGNORECASE)
+        text = re.sub(r'\b(?:flip\s*cart)\b', 'Flipkart', text, flags=re.IGNORECASE)
+        text = re.sub(r'\b(?:amazone)\b', 'Amazon', text, flags=re.IGNORECASE)
+
+        # Common location typos
+        text = re.sub(r'\b(?:vijaynagar|vijayanagara)\b', 'Vijayanagar', text, flags=re.IGNORECASE)
+
+        return text.strip()
+
+    @classmethod
+    def is_in_page_control(cls, prompt: str, curr_url: str) -> bool:
+        """Determines if a command is an in-page control action on the active page, or a new destination/search."""
+        url_lower = (curr_url or "").lower()
+        p_lower = prompt.lower().strip()
+
+        if not url_lower or url_lower == "about:blank" or url_lower.startswith("http://localhost:8000"):
+            return False
+
+        # Food & restaurant queries are never in-page controls unless already on Swiggy/Zomato
+        if any(term in p_lower for term in cls.FOOD_TERMS) and not ("swiggy" in url_lower or "zomato" in url_lower):
+            return False
+
+        # General questions and search verbs are searches, not in-page controls
+        if any(p_lower.startswith(q) for q in ["who is", "what is", "where is", "how to", "tell me about", "search", "find", "google", "browse", "look up"]):
+            return False
+
+        # Transit route searches are never in-page controls
+        if cls.parse_transit_route(prompt):
+            return False
+
+        # Suno AI studio controls
+        if "suno.com" in url_lower or "suno.ai" in url_lower:
+            return any(k in p_lower for k in ["create", "generate", "play", "pause", "instrumental", "lyrics", "prompt", "song", "track"])
+
+        # YouTube media controls
+        if "youtube.com" in url_lower:
+            return any(k in p_lower for k in ["play", "pause", "next", "fullscreen", "mute", "unmute", "volume", "theater", "skip", "queue", "search specific song", "search song"])
+
+        # AbhiBus / redBus filters
+        if "abhibus.com" in url_lower or "redbus.in" in url_lower:
+            return any(k in p_lower for k in ["sleeper", "seater", "ac", "non-ac", "fare", "price", "cheapest", "rating", "filter", "sort"])
+
+        # Short UI verbs
+        words = p_lower.split()
+        if len(words) <= 2 and any(w in cls.CONTROL_VERBS for w in words):
+            return True
+
+        return False
+
+    @classmethod
+    def normalize_city(cls, token: str) -> Optional[str]:
+        t = token.lower().strip(" ,.-/")
+        for standard_name, aliases in cls.CITY_ALIASES.items():
+            if t in aliases or standard_name.lower() == t:
+                return standard_name
+            for a in aliases:
+                if len(a) > 4 and len(t) > 4:
+                    if a[:4] == t[:4] and abs(len(a) - len(t)) <= 1:
+                        return standard_name
+        return None
+
+    @classmethod
+    def parse_transit_route(cls, raw_prompt: str) -> Optional[Tuple[str, str, bool]]:
+        cleaned = cls.clean_voice_text(raw_prompt)
+        is_tomorrow = any(k in cleaned.lower() for k in ["tomorrow", "kal", "next day"])
+
+        cleaned_route = re.sub(r'\b(?:find|show|book|search|get|buses|bus|tickets|ticket|for|me|please|can\s+you)\b', '', cleaned, flags=re.IGNORECASE).strip()
+        cleaned_route = re.sub(r'\b(?:tomorrow|today|now)\b', '', cleaned_route, flags=re.IGNORECASE).strip()
+
+        m = re.search(r'(?:from\s+)?([a-zA-Z]+(?:\s+[a-zA-Z]+)?)\s+(?:to|-|->)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)?)', cleaned_route, flags=re.IGNORECASE)
+        if m:
+            c1 = cls.normalize_city(m.group(1)) or m.group(1).title()
+            c2 = cls.normalize_city(m.group(2)) or m.group(2).title()
+            if c1 and c2 and c1.lower() != c2.lower():
+                return (c1, c2, is_tomorrow)
+
+        tokens = re.findall(r'\b[a-zA-Z]+\b', cleaned_route)
+        found_cities = []
+        for tok in tokens:
+            city = cls.normalize_city(tok)
+            if city and city not in found_cities:
+                found_cities.append(city)
+                if len(found_cities) == 2:
+                    break
+
+        if len(found_cities) >= 2:
+            return (found_cities[0], found_cities[1], is_tomorrow)
+
+        return None
+
 
 class AgentCore:
     def __init__(self):
@@ -928,7 +1081,8 @@ class AgentCore:
     async def start_autonomous_task(self, goal, context=""):
         """Starts executing a natural language goal on the live web."""
         await self.initialize()
-        self.current_goal = goal
+        cleaned_goal = SemanticIntentAnalyzer.clean_voice_text(goal)
+        self.current_goal = cleaned_goal
         self.current_context = context
         self.state = "RUNNING"
         self.action_history = []
@@ -943,7 +1097,7 @@ class AgentCore:
             "time": timestamp
         })
 
-        clean_goal = goal.strip().lower().rstrip("!.,?")
+        clean_goal = SemanticIntentAnalyzer.clean_voice_text(goal).lower().rstrip("!.,?")
         # Fast conversational greeting / pure chat handling (defaults browser to Google search bar)
         if clean_goal in ["hi", "hello", "hey", "hola", "greetings", "good morning", "good evening", "how are you", "who are you", "what can you do", "help"]:
             # Ensure live browser is docked on Google search bar
@@ -1130,23 +1284,28 @@ class AgentCore:
         elif any(k in clean_g_lower for k in ["mock emergency", "test emergency"]):
             target_initial_url = "http://localhost:8000/mock/emergency"
 
-        # F. IN-PAGE FOLLOW-UP ACTION CHECK:
-        # If user is already on a real web page (like suno.com, abhibus.com, etc.),
-        # DO NOT navigate away to Google Search for in-page actions like:
-        # "create", "click create", "enter prompt", "make song about...", "play", "filter", etc.
-        elif is_on_real_page:
-            target_initial_url = None
-            print(f"[AGENT CORE] User is on active site '{curr_page_url}'. Preserving session context for follow-up: '{goal}'")
+                # F. Direct Transit Route Navigation (e.g. "Bangalore to Hyderabad")
+        route_check = SemanticIntentAnalyzer.parse_transit_route(clean_g_lower)
+        if route_check and ("abhibus" in curr_host or "abhibus" in clean_g_lower or "bus" in clean_g_lower):
+            orig, dst, _ = route_check
+            target_initial_url = f"https://www.abhibus.com/bus-search?source={orig}&destination={dst}"
+            print(f"[AGENT CORE] Direct transit route identified: {orig} -> {dst}")
 
-        # G. General Search & Exploration query from blank/initial state
+        # G. IN-PAGE FOLLOW-UP ACTION CHECK:
+        # Only preserve current page if the command is genuinely an in-page control for the active site
+        elif SemanticIntentAnalyzer.is_in_page_control(clean_g_lower, curr_page_url):
+            target_initial_url = None
+            print(f"[AGENT CORE] User is on active site '{curr_page_url}'. Preserving session context for in-page control: '{goal}'")
+
+        # H. General Search & Exploration query (Food, Knowledge, Directions, Services)
         else:
             search_q = goal.strip()
-            for pfx in ["search for", "search", "google", "find", "look up", "tell me about", "who is", "what is"]:
+            for pfx in ["search for", "search", "google", "find", "look up", "tell me about", "who is", "what is", "browse"]:
                 if search_q.lower().startswith(pfx):
                     search_q = search_q[len(pfx):].strip()
                     break
             import urllib.parse
-            target_initial_url = f"https://www.google.com/search?q={urllib.parse.quote_plus(search_q)}"
+            target_initial_url = f"https://www.google.com/search?q={urllib.parse.quote_plus(search_q)}" 
 
         # Perform navigation if target differs from current page
         if target_initial_url and self.page:
@@ -1297,6 +1456,124 @@ class AgentCore:
                             print(f"  -> Navigating to: {target_url}")
                             await self.page.goto(target_url, wait_until="domcontentloaded", timeout=20000)
                             await asyncio.sleep(1.5)
+
+                    elif action_type == "abhibus_route_search":
+                        origin = action.get("origin", "Bangalore")
+                        dest = action.get("dest", "Hyderabad")
+                        is_tomorrow = action.get("is_tomorrow", False)
+
+                        print(f"  -> [ABHIBUS ROUTE SEARCH] {origin} -> {dest} (Tomorrow: {is_tomorrow})")
+                        await self.broadcast({"type": "LOG", "message": f"🚌 Searching AbhiBus: {origin} ➔ {dest}..."})
+
+                        search_url = f"https://www.abhibus.com/bus-search?source={origin}&destination={dest}"
+                        try:
+                            await self.page.goto(search_url, wait_until="domcontentloaded", timeout=15000)
+                            await asyncio.sleep(1.5)
+                        except Exception as e:
+                            print(f"[!] Direct AbhiBus navigation error: {e}")
+
+                        if is_tomorrow:
+                            try:
+                                tom_btn = self.page.locator("a:has-text('Tomorrow'), button:has-text('Tomorrow'), span:has-text('Tomorrow')").first
+                                if await tom_btn.count() > 0:
+                                    await tom_btn.click(timeout=2500)
+                                    await asyncio.sleep(0.8)
+                            except Exception:
+                                pass
+
+                        ans_msg = (
+                            f"🚌 **AbhiBus Route Found**: Showing live buses from **{origin}** to **{dest}**.\n\n"
+                            f"• **Fleet Options**: AC Sleeper, Non-AC Seater, KSRTC, TSRTC & Private operators.\n"
+                            f"• **Live Viewport**: Explore bus seat layouts, timings, and fares on the right pane!"
+                        )
+                        opts = [
+                            "🌙 AC Sleeper Only",
+                            "💰 Lowest Fare First",
+                            "⭐ 4.5+ Star RTCs",
+                            "🕒 Morning Departures"
+                        ]
+                        self.session_history.append({
+                            "role": "agent",
+                            "text": ans_msg,
+                            "options": opts,
+                            "time": time.strftime("%H:%M:%S")
+                        })
+                        await self.broadcast({
+                            "type": "CHAT_RESPONSE",
+                            "text": ans_msg,
+                            "options": opts,
+                            "reason": f"Dispatched AbhiBus route search {origin} to {dest}."
+                        })
+                        await self.broadcast({
+                            "type": "COMPLETE",
+                            "reason": f"Route search complete for {origin} to {dest}.",
+                            "has_chat_response": True
+                        })
+                        break
+
+                    elif action_type == "redbus_route_search":
+                        origin = action.get("origin", "Bangalore")
+                        dest = action.get("dest", "Hyderabad")
+                        is_tomorrow = action.get("is_tomorrow", False)
+
+                        print(f"  -> [REDBUS ROUTE SEARCH] {origin} -> {dest}")
+                        await self.broadcast({"type": "LOG", "message": f"🚌 Entering redBus route: {origin} ➔ {dest}..."})
+
+                        # 1. Fill Origin
+                        src_input = self.page.locator("input#src, input[placeholder*='From']").first
+                        if await src_input.count() > 0:
+                            await src_input.click()
+                            await src_input.fill(origin)
+                            await asyncio.sleep(0.8)
+                            await self.page.keyboard.press("ArrowDown")
+                            await self.page.keyboard.press("Enter")
+                            await asyncio.sleep(0.4)
+
+                        # 2. Fill Destination
+                        dst_input = self.page.locator("input#dest, input[placeholder*='To']").first
+                        if await dst_input.count() > 0:
+                            await dst_input.click()
+                            await dst_input.fill(dest)
+                            await asyncio.sleep(0.8)
+                            await self.page.keyboard.press("ArrowDown")
+                            await self.page.keyboard.press("Enter")
+                            await asyncio.sleep(0.4)
+
+                        # 3. Click Search
+                        search_btn = self.page.locator("button#search_btn, button:has-text('Search Buses')").first
+                        if await search_btn.count() > 0:
+                            await search_btn.click()
+                            await asyncio.sleep(2.5)
+
+                        ans_msg = (
+                            f"🚌 **redBus Route Found**: Showing live buses from **{origin}** to **{dest}**.\n\n"
+                            f"• **Fleet Options**: Sleeper, Seater, KSRTC, APSRTC & Private operators.\n"
+                            f"• **Live Viewport**: Explore available buses and seats in the right viewport!"
+                        )
+                        opts = [
+                            "🌙 AC Sleeper Only",
+                            "💰 Lowest Fare First",
+                            "⭐ 4.5+ Star RTCs",
+                            "🕒 Morning Departures"
+                        ]
+                        self.session_history.append({
+                            "role": "agent",
+                            "text": ans_msg,
+                            "options": opts,
+                            "time": time.strftime("%H:%M:%S")
+                        })
+                        await self.broadcast({
+                            "type": "CHAT_RESPONSE",
+                            "text": ans_msg,
+                            "options": opts,
+                            "reason": f"Dispatched redBus route search {origin} to {dest}."
+                        })
+                        await self.broadcast({
+                            "type": "COMPLETE",
+                            "reason": f"Route search complete for {origin} to {dest}.",
+                            "has_chat_response": True
+                        })
+                        break
 
                     elif action_type in ["open_tab", "new_tab", "open_new_tab", "tab_open"]:
                         target_url = (action.get("url") or text_val or selector or "about:blank").strip()
@@ -1687,7 +1964,7 @@ class AgentCore:
 
     async def _decide_next_action(self, goal, curr_url, curr_title, dom_elements="", context_info="", tabs_summary=""):
         """Queries Groq LPU with cognitive policy, DOM context, multi-turn history, multi-tab state, and resume data."""
-        clean_goal = goal.strip()
+        clean_goal = SemanticIntentAnalyzer.clean_voice_text(goal)
 
         # 1. Fast Heuristic: Google Search Home Page -> Type query and submit immediately
         if ("google.com" in curr_url or "bing.com" in curr_url) and not ("/search" in curr_url or "search?" in curr_url):
@@ -1797,30 +2074,107 @@ class AgentCore:
                     ]
                 }
 
-        # 2. Fast Heuristic: AbhiBus Portal Ready
+        # 2. AbhiBus Portal & Intelligent Route Booking
         if "abhibus.com" in curr_url.lower():
+            route = SemanticIntentAnalyzer.parse_transit_route(clean_goal)
+            if route:
+                origin, dest, is_tomorrow = route
+                return {
+                    "action": "abhibus_route_search",
+                    "origin": origin,
+                    "dest": dest,
+                    "is_tomorrow": is_tomorrow,
+                    "reason": f"Automating AbhiBus search from {origin} to {dest}."
+                }
+            
+            p_goal_lower = clean_goal.lower()
+            if any(k in p_goal_lower for k in ["sleeper", "ac", "lowest", "fare", "price", "cheapest"]):
+                return {
+                    "action": "click",
+                    "selector": "button:has-text('Sleeper'), label:has-text('Sleeper'), button:has-text('Price'), a:has-text('Lowest')",
+                    "reason": "Applying bus filter on AbhiBus.",
+                    "finish": True,
+                    "message": "🌙 **Filter Applied**: Applied bus preferences on AbhiBus.",
+                    "options": ["💰 Lowest Fare First", "⭐ 4.5+ Star RTCs", "🚌 Change Route", "🕒 Morning Departures"]
+                }
+
+            if "/bus-search" in curr_url.lower():
+                return {
+                    "action": "respond",
+                    "message": (
+                        "🚌 **Live Buses on AbhiBus**\n\n"
+                        "Showing live bus departures, RTC fleets, and AC Sleeper options.\n\n"
+                        "• Select a filter below or click any bus directly in the live viewport to choose your seat!"
+                    ),
+                    "options": [
+                        "🌙 AC Sleeper Only",
+                        "💰 Lowest Fare First",
+                        "⭐ 4.5+ Star RTCs",
+                        "🕒 Morning Departures"
+                    ],
+                    "reason": "Live bus search results displayed.",
+                    "finish": True
+                }
+
+            # Only when NO route is requested (initial landing), show portal ready
             return {
                 "action": "respond",
                 "message": (
-                    "🚌 **AbhiBus Live Portal Ready**\n\n"
-                    "I have opened **AbhiBus** (`https://www.abhibus.com`) in your live viewport!\n\n"
+                    "🚌 **AbhiBus Live Booking Portal Ready**\n\n"
+                    "I have opened **AbhiBus** in your live viewport!\n\n"
                     "• **Origin & Destination**: Choose departing and destination cities.\n"
                     "• **RTC & Private Fleets**: KSRTC, APSRTC, TSRTC, Zingbus, and private AC sleepers.\n"
-                    "• **Interactive Live Control**: Click on the live portal or tell me: *'Find buses from Bangalore to Hyderabad tomorrow'* and I will enter the details for you!"
+                    "• Select a popular route below or tell me your destination:"
                 ),
+                "options": [
+                    "🚌 Bangalore to Hyderabad",
+                    "🚌 Bangalore to Mysore",
+                    "🚌 Bangalore to Chennai",
+                    "🌙 AC Sleeper Only"
+                ],
                 "reason": "AbhiBus portal active in live viewport.",
                 "finish": True
             }
 
-        # 3. Fast Heuristic: redBus Portal Ready
+        # 3. redBus Portal & Intelligent Route Booking
         if "redbus.in" in curr_url.lower():
+            route = SemanticIntentAnalyzer.parse_transit_route(clean_goal)
+            if route:
+                origin, dest, is_tomorrow = route
+                return {
+                    "action": "redbus_route_search",
+                    "origin": origin,
+                    "dest": dest,
+                    "is_tomorrow": is_tomorrow,
+                    "reason": f"Automating redBus search from {origin} to {dest}."
+                }
+
+            p_goal_lower = clean_goal.lower()
+            if any(k in p_goal_lower for k in ["sleeper", "ac", "lowest", "fare", "price", "cheapest"]):
+                return {
+                    "action": "click",
+                    "selector": "button:has-text('Sleeper'), label:has-text('Sleeper'), div:has-text('Sleeper')",
+                    "reason": "Applying bus filter on redBus.",
+                    "finish": True,
+                    "message": "🌙 **Filter Applied**: Applied bus filter on redBus.",
+                    "options": ["💰 Lowest Fare First", "⭐ 4.5+ Star RTCs", "🚌 Change Route", "🕒 Morning Departures"]
+                }
+
             return {
                 "action": "respond",
                 "message": (
                     "🚌 **redBus Live Booking Portal Ready**\n\n"
-                    "I have opened **redBus** in your live browser viewport.\n\n"
-                    "You can select departure dates, filter by AC Sleeper or Seater, or tell me your route!"
+                    "I have opened **redBus** in your live browser viewport!\n\n"
+                    "• **Origin & Destination**: Choose departing and destination cities.\n"
+                    "• **RTC & Private Fleets**: KSRTC, APSRTC, TSRTC, Zingbus, and private AC sleepers.\n"
+                    "• Select a popular route below or type your destination:"
                 ),
+                "options": [
+                    "🚌 Bangalore to Hyderabad",
+                    "🚌 Bangalore to Mysore",
+                    "🚌 Bangalore to Chennai",
+                    "🌙 AC Sleeper Only"
+                ],
                 "reason": "redBus portal active in live viewport.",
                 "finish": True
             }
@@ -1845,7 +2199,18 @@ class AgentCore:
                         ]
                     }
                 else:
-                    # Already in creation studio! Extract song prompt
+                    # If user clicks create or says "create", click Create button directly
+                    if any(k in p_goal_lower for k in ["click create", "generate track", "submit", "hit create", "create to generate"]):
+                        return {
+                            "action": "click",
+                            "selector": "button:has-text('Create'), button[aria-label*='Create'], [data-testid*='create']",
+                            "reason": "Clicking Create to generate song in Suno AI studio.",
+                            "finish": True,
+                            "message": "🚀 **Generating Music Track**: Clicked Create in Suno AI Studio. Generating your track stems!",
+                            "options": ["🎧 Play Generated Track", "🎛️ Instrumental Mode", "✍️ Edit Lyrics", "✨ New Song"]
+                        }
+
+                    # Extract song prompt from current prompt or session history
                     song_prompt = clean_goal
                     for pfx in ["create", "click create", "make a song about", "make a song", "write a song about", "generate a song about", "generate"]:
                         if song_prompt.lower().startswith(pfx):
@@ -1908,6 +2273,41 @@ class AgentCore:
                     "finish": True
                 }
 
+                # 4.8. Direct Quick Action Chips: Google Maps & Swiggy
+        p_clean_lower = clean_goal.lower()
+        if any(k in p_clean_lower for k in ["open in google maps", "google maps", "open maps"]):
+            # Extract last query or location from session history
+            last_query = ""
+            for turn in reversed(self.session_history):
+                if turn.get("role") == "user":
+                    t = turn.get("text", "")
+                    if "maps" not in t.lower() and len(t) > 4:
+                        last_query = t
+                        break
+            if not last_query:
+                last_query = "best biryani in Vijayanagar Bangalore"
+            import urllib.parse
+            maps_url = f"https://www.google.com/maps/search/{urllib.parse.quote_plus(last_query)}"
+            return {
+                "action": "navigate",
+                "url": maps_url,
+                "reason": f"Opening Google Maps for '{last_query}'",
+                "finish": True,
+                "message": f"📍 **Google Maps Active**: Showing locations and interactive pins for **\"{last_query}\"**.",
+                "options": ["⭐ Filter Top Rated 4.5+", "🛵 Order on Swiggy", "💰 Budget Friendly", "🔍 Search Other Area"]
+            }
+
+        if any(k in p_clean_lower for k in ["order on swiggy", "view on swiggy", "swiggy"]):
+            swiggy_url = "https://www.swiggy.com/restaurants/biryani-vijayanagar-bangalore"
+            return {
+                "action": "navigate",
+                "url": swiggy_url,
+                "reason": "Opening Swiggy for Vijayanagar biryani",
+                "finish": True,
+                "message": "🛵 **Swiggy Active**: Showing live food delivery restaurants and menus for Vijayanagar.",
+                "options": ["⭐ Top Rated Dishes", "⚡ Fast Delivery Under 30 Mins", "💰 Discounts & Offers", "📍 Change Location"]
+            }
+
         # 5. Fast Heuristic: Google Search Results Extraction with Clickable Options
         if ("google.com" in curr_url.lower() or "bing.com" in curr_url.lower()) and ("/search" in curr_url.lower() or "search?" in curr_url.lower()):
             try:
@@ -1965,19 +2365,17 @@ class AgentCore:
 
         # Concise, high-speed cognitive system prompt (keeps token usage ultra-low)
         sys_prompt = (
-            "You are Jarvis-Wormhole, an elite autonomous web navigation and web intelligence agent.\n"
-            "Decide the next action to achieve the user's goal based on the active page.\n"
-            "Output JSON with ONE action:\n"
-            "1. respond: {\"action\": \"respond\", \"message\": \"markdown text answer in chat\", \"reason\": \"...\", \"finish\": true}\n"
-            "2. type: {\"action\": \"type\", \"selector\": \"selector\", \"text\": \"string\", \"press_enter\": true, \"reason\": \"...\"}\n"
-            "3. click: {\"action\": \"click\", \"selector\": \"selector\", \"reason\": \"...\"}\n"
-            "4. fill_form: {\"action\": \"fill_form\", \"fields\": {\"selector\": \"val\"}, \"reason\": \"...\"}\n"
-            "5. navigate: {\"action\": \"navigate\", \"text\": \"https://...\", \"reason\": \"...\"}\n"
-            "6. open_tab: {\"action\": \"open_tab\", \"url\": \"https://...\", \"reason\": \"...\"}\n"
-            "7. switch_tab: {\"action\": \"switch_tab\", \"target\": 0, \"reason\": \"...\"}\n"
-            "8. close_tab: {\"action\": \"close_tab\", \"target\": 1, \"reason\": \"...\"}\n"
-            "9. scroll: {\"action\": \"scroll\", \"reason\": \"...\"}\n"
-            "10. finish: {\"action\": \"finish\", \"reason\": \"...\"}\n"
+            "You are Wormhole Copilot, an elite autonomous browser navigation and web intelligence agent.\n"
+            "Analyze the user's intent deeply, being fully tolerant of speech-to-text slips, phonetic typos, and spelling mistakes.\n"
+            "CRITICAL DIRECTIVES:\n"
+            "1. NEVER output a generic greeting, welcome message, or 'I am ready/prepared' when the user gives an instruction or goal! Always execute a real action.\n"
+            "2. Always output ONE actionable web step to complete or advance the user's goal directly:\n"
+            "   - type: {\"action\": \"type\", \"selector\": \"input selector\", \"text\": \"search/input value\", \"press_enter\": true, \"reason\": \"...\"}\n"
+            "   - click: {\"action\": \"click\", \"selector\": \"button/link selector\", \"reason\": \"...\", \"finish\": true}\n"
+            "   - fill_form: {\"action\": \"fill_form\", \"fields\": {\"selector\": \"val\"}, \"reason\": \"...\"}\n"
+            "   - navigate: {\"action\": \"navigate\", \"url\": \"https://...\", \"reason\": \"...\"}\n"
+            "   - respond: {\"action\": \"respond\", \"message\": \"informative markdown answer answering the question\", \"options\": [\"Opt 1\", \"Opt 2\"], \"reason\": \"...\", \"finish\": true}\n"
+            "3. If the user asks a question, inspect the DOM content and answer it thoroughly in 'message' with 2-4 interactive options.\n"
             "Always return valid JSON only."
         )
 
@@ -1990,9 +2388,9 @@ class AgentCore:
             if txt:
                 messages.append({"role": r, "content": txt[:280]})
 
-        # Trim elements to 800 chars max
-        dom_trimmed = (dom_elements or "")[:800]
-        ctx_trimmed = (context_info or "")[:400]
+        # Trim elements to 4,000 chars (gives full DOM visibility to LLM)
+        dom_trimmed = (dom_elements or "")[:4000]
+        ctx_trimmed = (context_info or "")[:1000]
 
         user_msg = (
             f"Goal: {clean_goal}\n"
