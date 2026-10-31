@@ -142,6 +142,10 @@ class SemanticIntentAnalyzer:
         if "abhibus.com" in url_lower or "redbus.in" in url_lower:
             return any(k in p_lower for k in ["sleeper", "seater", "ac", "non-ac", "fare", "price", "cheapest", "rating", "filter", "sort"])
 
+        # Amazon / Flipkart shopping filters
+        if "amazon." in url_lower or "flipkart." in url_lower:
+            return any(k in p_lower for k in ["lowest", "price", "star", "rating", "rated", "prime", "deal", "deals", "filter", "sort", "buy", "cart", "add to cart"])
+
         # General questions and search verbs are searches, not in-page controls
         if any(p_lower.startswith(q) for q in ["who is", "what is", "where is", "how to", "tell me about", "google", "browse", "look up"]):
             return False
@@ -1098,7 +1102,7 @@ class AgentCore:
         self.state = "RUNNING"
         self.action_history = []
         self.interrupt_event.clear()
-        self.resume_event.clear()
+        self.resume_event.set()
 
         # Record prompt in multi-turn session history
         timestamp = time.strftime("%H:%M:%S")
@@ -2008,6 +2012,83 @@ class AgentCore:
                 "reason": "Continuing to the next step on active page.",
                 "finish": False
             }
+
+        # Amazon search results instant filter & sorting handlers
+        if "amazon." in curr_url.lower():
+            if any(k in p_clean_lower for k in ["lowest price", "cheapest", "low to high", "price low"]):
+                new_url = curr_url
+                if "s=" in new_url:
+                    new_url = re.sub(r's=[^&]+', 's=price-asc-rank', new_url)
+                else:
+                    sep = "&" if "?" in new_url else "?"
+                    new_url = f"{new_url}{sep}s=price-asc-rank"
+                return {
+                    "action": "navigate",
+                    "url": new_url,
+                    "reason": "Sorting Amazon products by Lowest Price (Price: Low to High).",
+                    "finish": True,
+                    "message": "💰 **Sorted by Lowest Price**: Showing Amazon products from lowest to highest price.",
+                    "options": [
+                        "⭐ 4+ Star Rated",
+                        "⚡ Prime / Assured",
+                        "🏷️ Today's Deals",
+                        "🔍 New Search"
+                    ]
+                }
+            elif any(k in p_clean_lower for k in ["4+ star", "4 star", "top rated", "customer reviews", "rating"]):
+                new_url = curr_url
+                if "p_72" not in new_url:
+                    sep = "&" if "?" in new_url else "?"
+                    new_url = f"{new_url}{sep}rh=p_72%3A1318476031"
+                return {
+                    "action": "navigate",
+                    "url": new_url,
+                    "reason": "Filtering Amazon products by 4 Stars and Up.",
+                    "finish": True,
+                    "message": "⭐ **Filtered by 4+ Star Rating**: Showing top customer-rated products on Amazon.",
+                    "options": [
+                        "💰 Lowest Price",
+                        "⚡ Prime / Assured",
+                        "🏷️ Today's Deals",
+                        "🔍 New Search"
+                    ]
+                }
+            elif any(k in p_clean_lower for k in ["prime", "assured", "fast delivery"]):
+                new_url = curr_url
+                if "p_85" not in new_url:
+                    sep = "&" if "?" in new_url else "?"
+                    new_url = f"{new_url}{sep}rh=p_85%3A10440599031"
+                return {
+                    "action": "navigate",
+                    "url": new_url,
+                    "reason": "Filtering Amazon products with Prime delivery.",
+                    "finish": True,
+                    "message": "⚡ **Prime Delivery Filtered**: Showing Prime eligible items on Amazon.",
+                    "options": [
+                        "💰 Lowest Price",
+                        "⭐ 4+ Star Rated",
+                        "🏷️ Today's Deals",
+                        "🔍 New Search"
+                    ]
+                }
+            elif any(k in p_clean_lower for k in ["deal", "discount", "offer"]):
+                new_url = curr_url
+                if "p_n_deal_type" not in new_url:
+                    sep = "&" if "?" in new_url else "?"
+                    new_url = f"{new_url}{sep}rh=p_n_deal_type%3A2692251031"
+                return {
+                    "action": "navigate",
+                    "url": new_url,
+                    "reason": "Filtering Amazon Today's Deals.",
+                    "finish": True,
+                    "message": "🏷️ **Today's Deals Filtered**: Showing discounted deals on Amazon.",
+                    "options": [
+                        "💰 Lowest Price",
+                        "⭐ 4+ Star Rated",
+                        "⚡ Prime / Assured",
+                        "🔍 New Search"
+                    ]
+                }
 
         # 1. Fast Heuristic: Google Search Home Page -> Type query and submit immediately
         if ("google.com" in curr_url or "bing.com" in curr_url) and not ("/search" in curr_url or "search?" in curr_url):

@@ -94,7 +94,10 @@ class FraudSentinel:
                 }
                 return self.last_detection
 
-        # 3. DOM Input Fields Audit
+        # 3. DOM Input Fields Audit (Skip on search/browse listing pages where no payment forms exist)
+        if any(k in curr_url.lower() for k in ["/s?", "/search", "search_query", "results?"]):
+            return {"is_sensitive": False, "type": None}
+
         try:
             inputs = await page.locator("input, iframe").all()
             for inp in inputs:
@@ -103,13 +106,27 @@ class FraudSentinel:
                     if tag == "iframe":
                         src = await inp.get_attribute("src") or ""
                         name = await inp.get_attribute("name") or ""
-                        # Ignore background preconnect / telemetry iframes
-                        if "controller" in src.lower() or "preconnect" in src.lower() or "m-outer" in src.lower():
+                        # Ignore background preconnect, ad networks, telemetry, and media CDNs
+                        if any(k in src.lower() or k in name.lower() for k in [
+                            "controller", "preconnect", "m-outer", "media-amazon", "amazon-adsystem",
+                            "doubleclick", "googlesyndication", "googleads", "adnxs", "criteo", "youtube", "suno", "ape_search"
+                        ]):
                             continue
                         is_vis = await inp.is_visible()
                         if not is_vis:
                             continue
-                        if any(k in src.lower() or k in name.lower() for k in ["stripe", "turnstile", "recaptcha", "razorpay"]):
+                        # Strictly verify actual payment gateway providers
+                        is_payment_iframe = False
+                        if "stripe.com" in src.lower() or any(k in name.lower() for k in ["__privatestripeframe", "stripe-elements", "stripe_checkout"]):
+                            is_payment_iframe = True
+                        elif "razorpay.com" in src.lower() or "razorpay-frame" in name.lower():
+                            is_payment_iframe = True
+                        elif "challenges.cloudflare.com" in src.lower():
+                            is_payment_iframe = True
+                        elif "google.com/recaptcha" in src.lower() or "recaptcha/api" in src.lower():
+                            is_payment_iframe = True
+
+                        if is_payment_iframe:
                             self.state = "PAUSED_FOR_HUMAN"
                             self.last_detection = {
                                 "is_sensitive": True,
