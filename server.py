@@ -739,4 +739,5 @@ if __name__ == "__main__":
     print("  * Local Web Cockpit: http://localhost:8000")
     print("  * Live WebSocket Stream: ws://localhost:8000/ws/screencast")
     print("=================================================================\n")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

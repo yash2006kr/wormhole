@@ -3,7 +3,6 @@ ApplyCopilot Universal Multi-Provider API Pool & Self-Healing Client.
 Seamlessly cascades between:
   1. Groq Cloud (Multi-Key Pool with automatic 429 rotation)
   2. Google Gemini 2.5 Flash (Google AI Studio REST API: 1M TPM / 1500 RPD Free)
-  3. OpenRouter Free Tier (Llama 3.3 70B Free, Gemini 2.0 Flash Free)
   4. Cerebras Cloud (1M free tokens/day at 2000 tok/sec)
   5. Local Zero-Token Autonomous Engine (Zero external dependencies)
 
@@ -196,75 +195,6 @@ class GeminiProvider:
 
 
 # ==============================================================================
-# 3. OPENROUTER FREE TIER PROVIDER
-# ==============================================================================
-class OpenRouterProvider:
-    def __init__(self):
-        self.api_key = os.getenv("OPENROUTER_API_KEY", "").strip().strip("'\"")
-        self.cooldown_until = 0.0
-        self.models = [
-            "nvidia/nemotron-3.5-lightning:free",
-            "google/gemma-4-26b-a4b-it:free",
-            "recursive/flint-v1.0:free",
-            "liquid/lfm-2.5-2.6b:free"
-        ]
-        if self.api_key:
-            print("[API POOL] Initialized OpenRouter Free Tier Provider.")
-
-    def execute(self, messages: List[Dict[str, str]], max_tokens: int = 300) -> Optional[Dict[str, Any]]:
-        if not self.api_key or time.time() < self.cooldown_until:
-            return None
-
-        url = "https://openrouter.ai/api/v1/chat/completions"
-        for model in self.models:
-            payload = {
-                "model": model,
-                "messages": messages,
-                "temperature": 0.1,
-                "max_tokens": max_tokens
-            }
-            try:
-                req = urllib.request.Request(
-                    url,
-                    data=json.dumps(payload).encode("utf-8"),
-                    headers={
-                        "Content-Type": "application/json",
-                        "Authorization": f"Bearer {self.api_key}",
-                        "HTTP-Referer": "http://localhost:8000",
-                        "X-Title": "Wormhole Copilot"
-                    }
-                )
-                with urllib.request.urlopen(req, timeout=12) as resp:
-                    data = json.loads(resp.read().decode("utf-8"))
-                    msg = data["choices"][0]["message"]
-                    text = (msg.get("content") or msg.get("reasoning") or "").strip()
-                    parsed = self._clean_and_parse_json(text)
-                    if parsed:
-                        print(f"[API POOL] [OK] OpenRouter ({model}) returned action: '{parsed.get('action')}'")
-                        return parsed
-            except urllib.error.HTTPError as e:
-                if e.code == 429:
-                    self.cooldown_until = time.time() + 60.0
-                    break
-            except Exception as e:
-                print(f"[API POOL] [!WARN] OpenRouter error on {model}: {e}")
-                continue
-
-        return None
-
-    def _clean_and_parse_json(self, raw: str) -> Optional[Dict[str, Any]]:
-        text = raw.strip()
-        if "```json" in text:
-            text = text.split("```json")[1].split("```")[0].strip()
-        elif "```" in text:
-            text = text.split("```")[1].split("```")[0].strip()
-        try:
-            return json.loads(text)
-        except Exception:
-            return None
-
-
-# ==============================================================================
 # 4. CEREBRAS CLOUD PROVIDER (1M Tokens/Day Free)
 # ==============================================================================
 class CerebrasProvider:
@@ -320,7 +250,6 @@ class MultiKeyAPIPool:
         self.current_idx = 0
         self._load_groq_keys()
         self.gemini = GeminiProvider()
-        self.openrouter = OpenRouterProvider()
         self.cerebras = CerebrasProvider()
 
     def _load_groq_keys(self):
@@ -358,10 +287,6 @@ class MultiKeyAPIPool:
                 self.keys.append(new_obj)
                 print(f"[API POOL] Added Groq key #{new_obj.index}")
                 return True
-        elif cleaned.startswith("sk-or-v1-"):
-            self.openrouter.api_key = cleaned
-            print("[API POOL] Set OpenRouter key.")
-            return True
         elif cleaned.startswith("csk-"):
             self.cerebras.api_key = cleaned
             print("[API POOL] Set Cerebras key.")
@@ -397,7 +322,6 @@ class MultiKeyAPIPool:
         Universal fallback cascade:
           1. Groq Multi-Key Pool (Ultra-fast LPU)
           2. Google Gemini 2.5 Flash (1M TPM / 1500 RPD Free)
-          3. OpenRouter Free Tier (Llama 3.3 70B Free)
           4. Cerebras Cloud (1M Tokens/Day Free)
           5. Local Zero-Token Autonomous Engine (return None)
         """
@@ -472,8 +396,6 @@ class MultiKeyAPIPool:
         if gemini_action:
             return gemini_action
 
-        # OpenRouter disabled per user request - using Groq & Gemini exclusively
-
         # --- LEVEL 4: CEREBRAS CLOUD ---
         if self.cerebras.api_key:
             print("[API POOL] [FAILOVER] Cascading to Cerebras Cloud...")
@@ -507,7 +429,6 @@ class MultiKeyAPIPool:
             "groq_keys_healthy": sum(1 for k in self.keys if k.is_available()),
             "gemini_keys": len(self.gemini.keys),
             "gemini_active": len(self.gemini.keys) > 0 and time.time() >= self.gemini.cooldown_until,
-            "openrouter_active": bool(self.openrouter.api_key),
             "cerebras_active": bool(self.cerebras.api_key)
         }
 

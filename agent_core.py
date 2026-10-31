@@ -49,7 +49,11 @@ class SemanticIntentAnalyzer:
     CONTROL_VERBS = [
         "click", "tap", "press", "select", "choose", "scroll", "next", "previous",
         "pause", "resume", "play", "stop", "fullscreen", "maximize", "filter",
-        "sort", "submit", "apply", "enter", "type", "fill", "close", "reload"
+        "sort", "submit", "apply", "enter", "type", "fill", "close", "reload",
+        "send", "continue", "proceed", "confirm", "ok", "yes", "done", "finish",
+        "create", "generate", "compose", "make", "build", "run", "retry",
+        "upload", "download", "attach", "save", "update", "cancel", "clear",
+        "book", "buy", "checkout", "login", "signin", "signup"
     ]
 
     CITY_ALIASES = {
@@ -142,9 +146,15 @@ class SemanticIntentAnalyzer:
         if any(p_lower.startswith(q) for q in ["who is", "what is", "where is", "how to", "tell me about", "google", "browse", "look up"]):
             return False
 
-        # Short UI verbs
+        # UI verbs or control phrases
         words = p_lower.split()
-        if len(words) <= 2 and any(w in cls.CONTROL_VERBS for w in words):
+        if any(w in cls.CONTROL_VERBS for w in words):
+            return True
+        if any(k in p_lower for k in [
+            "send message", "send msg", "submit form", "fill form", "fill contact", 
+            "contact me", "contact form", "next step", "continue", "proceed",
+            "press enter", "click button", "check box", "sign in", "log in"
+        ]):
             return True
 
         return False
@@ -1299,7 +1309,12 @@ class AgentCore:
             target_initial_url = None
             print(f"[AGENT CORE] User is on active site '{curr_page_url}'. Preserving session context for in-page control: '{goal}'")
 
-        # I. General Search & Exploration query (Food, Knowledge, Directions, Services)
+        # I. If already on a real website, retain active page unless user explicitly asks to Google or search trivia:
+        elif is_on_real_page and not any(clean_g_lower.startswith(q) for q in ["google ", "search google for ", "search for ", "who is ", "what is ", "where is ", "tell me about ", "browse ", "look up "]):
+            target_initial_url = None
+            print(f"[AGENT CORE] Active site '{curr_page_url}' retained for in-page task: '{goal}'")
+
+        # J. General Search & Exploration query (Food, Knowledge, Directions, Services)
         else:
             search_q = goal.strip()
             for pfx in ["search for", "search", "google", "find", "look up", "tell me about", "who is", "what is", "browse"]:
@@ -1313,9 +1328,9 @@ class AgentCore:
         if target_initial_url and self.page:
             try:
                 curr_u = self.page.url or ""
-                target_host = urlparse(target_initial_url).netloc
-                curr_host = urlparse(curr_u).netloc
-                if target_host != curr_host or ("/search" in target_initial_url and target_initial_url != curr_u):
+                target_host = urlparse(target_initial_url).netloc.lower()
+                curr_host = urlparse(curr_u).netloc.lower()
+                if target_host != curr_host or target_initial_url.rstrip("/") != curr_u.rstrip("/"):
                     print(f"[AGENT CORE] Navigating live browser to: {target_initial_url}")
                     await self.broadcast({
                         "type": "LOG",
@@ -1968,6 +1983,32 @@ class AgentCore:
         """Queries Groq LPU with cognitive policy, DOM context, multi-turn history, multi-tab state, and resume data."""
         clean_goal = SemanticIntentAnalyzer.clean_voice_text(goal)
 
+        p_clean_lower = clean_goal.lower().strip()
+
+        # In-page fast control: "send message", "submit", "click send", "send form" on any website
+        if p_clean_lower in ["send message", "send", "submit", "submit form", "click send", "click submit", "send it", "send the message", "post message"]:
+            return {
+                "action": "click",
+                "selector": "button:has-text('Send Message'), button:has-text('Submit'), button[type='submit'], input[type='submit'], button:has-text('Send'), #submit-button, .submit-btn, [data-testid*='submit'], [data-testid*='send']",
+                "reason": f"Submitting active form: '{clean_goal}'",
+                "finish": True,
+                "message": "✉️ **Message Sent**: Submitted the form successfully on the live page.",
+                "options": [
+                    "🔄 Refresh Page",
+                    "📄 View Resume",
+                    "💬 Send Another Message"
+                ]
+            }
+
+        # In-page fast continuation: "continue", "proceed", "next", "confirm"
+        if p_clean_lower in ["continue", "proceed", "next", "go ahead", "do it", "confirm"]:
+            return {
+                "action": "click",
+                "selector": "button:has-text('Continue'), button:has-text('Next'), button:has-text('Proceed'), a:has-text('Continue'), a:has-text('Next'), button[type='submit']",
+                "reason": "Continuing to the next step on active page.",
+                "finish": False
+            }
+
         # 1. Fast Heuristic: Google Search Home Page -> Type query and submit immediately
         if ("google.com" in curr_url or "bing.com" in curr_url) and not ("/search" in curr_url or "search?" in curr_url):
             search_text = clean_goal
@@ -2202,7 +2243,7 @@ class AgentCore:
                     }
                 else:
                     # If user clicks create or says "create", click Create button directly
-                    if any(k in p_goal_lower for k in ["click create", "generate track", "submit", "hit create", "create to generate"]):
+                    if any(k == p_goal_lower or k in p_goal_lower for k in ["create", "click create", "generate track", "submit", "hit create", "create to generate"]):
                         return {
                             "action": "click",
                             "selector": "button:has-text('Create'), button[aria-label*='Create'], [data-testid*='create']",
