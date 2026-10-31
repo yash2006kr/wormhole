@@ -443,6 +443,23 @@ class MultiKeyAPIPool:
                     if "401" in err_text or "invalid" in err_text.lower():
                         key_status.mark_invalid(err_text[:80])
                         break
+                    if "400" in err_text or "json" in err_text.lower():
+                        # Bad request or JSON mode format issue: retry without response_format constraint
+                        try:
+                            res = client.chat.completions.create(
+                                model=model_name,
+                                messages=messages,
+                                temperature=temperature,
+                                max_tokens=max_tokens
+                            )
+                            content = (res.choices[0].message.content or "{}").strip()
+                            parsed = self._parse_json_result(content)
+                            if parsed:
+                                key_status.mark_success()
+                                return parsed
+                        except Exception:
+                            pass
+                        continue
                     key_status.mark_rate_limit(cooldown_seconds=30.0, err_msg=err_text[:80])
                     break
                 except Exception as e:

@@ -2417,7 +2417,7 @@ class AgentCore:
             messages=messages,
             models=["qwen/qwen3.8-27b", "openai/gpt-oss-20b", "openai/gpt-oss-120b"],
             temperature=0.1,
-            max_tokens=300,
+            max_tokens=1000,
             response_format={"type": "json_object"}
         )
 
