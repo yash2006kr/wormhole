@@ -1,0 +1,353 @@
+/* ==========================================================================
+   VOICE ORB - Living AI Voice Assistant Presence
+   WORMHOLE Futuristic Voice Mode
+   ========================================================================== */
+
+.voice-orb-container {
+  position: fixed;
+  top: 44%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  user-select: none;
+  cursor: pointer;
+}
+
+/* Enter / Exit Transition States */
+.voice-orb-container.entering {
+  animation: orbCinematicEnter 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.voice-orb-container.active {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.voice-orb-container.exiting {
+  animation: orbCinematicExit 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes orbCinematicEnter {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.65);
+    filter: drop-shadow(0 0 10px rgba(0, 242, 254, 0.2)) blur(6px);
+  }
+  60% {
+    opacity: 0.95;
+    transform: translate(-50%, -50%) scale(1.04);
+    filter: drop-shadow(0 0 60px rgba(0, 242, 254, 0.8)) blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    filter: drop-shadow(0 0 35px rgba(0, 229, 255, 0.5));
+  }
+}
+
+@keyframes orbCinematicExit {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.7);
+    filter: blur(8px);
+  }
+}
+
+/* Living Floating & Breathing Wrapper */
+.voice-orb-wrapper {
+  position: relative;
+  width: clamp(260px, 32vw, 340px);
+  height: clamp(260px, 32vw, 340px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: orbLevitate 4.5s ease-in-out infinite alternate;
+}
+
+@keyframes orbLevitate {
+  0% {
+    transform: translateY(-8px);
+  }
+  50% {
+    transform: translateY(6px);
+  }
+  100% {
+    transform: translateY(-8px);
+  }
+}
+
+/* 1. Atmospheric Deep Cosmic Glow Halo */
+.voice-orb-halo {
+  position: absolute;
+  inset: -45%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    rgba(0, 242, 254, 0.32) 0%,
+    rgba(0, 140, 255, 0.22) 32%,
+    rgba(0, 255, 179, 0.12) 52%,
+    rgba(15, 10, 40, 0.05) 70%,
+    transparent 85%
+  );
+  filter: blur(32px);
+  pointer-events: none;
+  animation: haloPulse 3.6s ease-in-out infinite alternate;
+}
+
+@keyframes haloPulse {
+  0% {
+    opacity: 0.65;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 0.65;
+    transform: scale(0.95);
+  }
+}
+
+/* 2. Orbiting Quantum Energy Rings */
+.voice-orb-ring {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.voice-orb-ring-1 {
+  width: 114%;
+  height: 114%;
+  border: 1.5px solid transparent;
+  border-top: 1.5px solid rgba(0, 242, 254, 0.85);
+  border-bottom: 1.5px solid rgba(0, 255, 180, 0.6);
+  box-shadow: 0 0 16px rgba(0, 242, 254, 0.4);
+  transform: rotateX(68deg) rotateY(22deg);
+  animation: spinRing1 12s linear infinite;
+}
+
+.voice-orb-ring-2 {
+  width: 122%;
+  height: 122%;
+  border: 1px solid transparent;
+  border-left: 1.5px solid rgba(0, 160, 255, 0.75);
+  border-right: 1.5px solid rgba(0, 242, 254, 0.5);
+  box-shadow: 0 0 20px rgba(0, 140, 255, 0.35);
+  transform: rotateX(62deg) rotateY(-38deg);
+  animation: spinRing2 16s linear infinite reverse;
+}
+
+@keyframes spinRing1 {
+  0% {
+    transform: rotateX(68deg) rotateY(22deg) rotateZ(0deg);
+  }
+  100% {
+    transform: rotateX(68deg) rotateY(22deg) rotateZ(360deg);
+  }
+}
+
+@keyframes spinRing2 {
+  0% {
+    transform: rotateX(62deg) rotateY(-38deg) rotateZ(0deg);
+  }
+  100% {
+    transform: rotateX(62deg) rotateY(-38deg) rotateZ(360deg);
+  }
+}
+
+/* 3. The Core Glass Spherical Image */
+.voice-orb-sphere {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 0 45px rgba(0, 229, 255, 0.45),
+    inset 0 0 35px rgba(0, 180, 255, 0.3);
+}
+
+.voice-orb-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: orbCoreBreathe 4s ease-in-out infinite alternate;
+}
+
+@keyframes orbCoreBreathe {
+  0% {
+    transform: scale(0.99);
+    filter: brightness(1) drop-shadow(0 0 15px rgba(0, 242, 254, 0.4));
+  }
+  50% {
+    transform: scale(1.02);
+    filter: brightness(1.12) drop-shadow(0 0 28px rgba(0, 242, 254, 0.75));
+  }
+  100% {
+    transform: scale(0.99);
+    filter: brightness(1) drop-shadow(0 0 15px rgba(0, 242, 254, 0.4));
+  }
+}
+
+/* 4. Glass Surface Refraction Sheen Overlay */
+.voice-orb-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 30% 25%,
+    rgba(255, 255, 255, 0.28) 0%,
+    rgba(0, 242, 254, 0.15) 30%,
+    transparent 60%
+  );
+  pointer-events: none;
+  mix-blend-mode: overlay;
+  animation: sheenShift 6s ease-in-out infinite alternate;
+}
+
+@keyframes sheenShift {
+  0% {
+    opacity: 0.7;
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: rotate(15deg) scale(1.03);
+  }
+  100% {
+    opacity: 0.7;
+    transform: rotate(-10deg) scale(1);
+  }
+}
+
+/* 5. Sleek Voice Status Pill HUD */
+.voice-orb-hud {
+  margin-top: 32px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 22px;
+  border-radius: 9999px;
+  background: rgba(10, 8, 22, 0.85);
+  border: 1px solid rgba(0, 242, 254, 0.45);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.6),
+    0 0 20px rgba(0, 242, 254, 0.25),
+    inset 0 0 12px rgba(0, 242, 254, 0.12);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: hudFadeUp 0.8s ease-out 0.4s both;
+}
+
+.voice-orb-container:hover .voice-orb-hud {
+  border-color: rgba(0, 242, 254, 0.85);
+  box-shadow:
+    0 8px 36px rgba(0, 0, 0, 0.7),
+    0 0 28px rgba(0, 242, 254, 0.45),
+    inset 0 0 16px rgba(0, 242, 254, 0.2);
+  transform: translateY(-2px);
+}
+
+@keyframes hudFadeUp {
+  0% {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Audio Waveform Bars */
+.voice-orb-wave {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 18px;
+}
+
+.voice-orb-wave-bar {
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #00f2fe 0%, #00ffb4 100%);
+  box-shadow: 0 0 6px rgba(0, 242, 254, 0.8);
+  animation: waveBarBounce 1.2s ease-in-out infinite alternate;
+}
+
+.voice-orb-wave-bar:nth-child(1) {
+  height: 8px;
+  animation-delay: 0.1s;
+}
+.voice-orb-wave-bar:nth-child(2) {
+  height: 16px;
+  animation-delay: 0.3s;
+}
+.voice-orb-wave-bar:nth-child(3) {
+  height: 12px;
+  animation-delay: 0.2s;
+}
+.voice-orb-wave-bar:nth-child(4) {
+  height: 18px;
+  animation-delay: 0.4s;
+}
+.voice-orb-wave-bar:nth-child(5) {
+  height: 10px;
+  animation-delay: 0.15s;
+}
+
+@keyframes waveBarBounce {
+  0% {
+    transform: scaleY(0.4);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scaleY(1.3);
+    opacity: 1;
+  }
+}
+
+/* HUD Text */
+.voice-orb-hud-text {
+  font-family: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: #e0faff;
+  text-shadow: 0 0 10px rgba(0, 242, 254, 0.6);
+}
+
+.voice-orb-hud-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 4px;
+  padding: 3px;
+  border-radius: 50%;
+  color: rgba(224, 250, 255, 0.65);
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.voice-orb-container:hover .voice-orb-hud-close {
+  color: #ffffff;
+  transform: scale(1.15);
+}
+

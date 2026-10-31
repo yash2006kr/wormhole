@@ -368,6 +368,27 @@ async def serve_mock_orders():
     """
     return HTMLResponse(content=html)
 
+DOWNLOADS_DIR = BASE_DIR / "static" / "downloads"
+DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+@app.get("/download/{filename}")
+@app.get("/downloads/{filename}")
+async def serve_download_file(filename: str):
+    file_path = DOWNLOADS_DIR / filename
+    if not file_path.exists():
+        if (BASE_DIR / "static" / filename).exists():
+            file_path = BASE_DIR / "static" / filename
+        elif (BASE_DIR / filename).exists():
+            file_path = BASE_DIR / filename
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(
+            file_path,
+            filename=filename,
+            media_type="application/octet-stream",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+    return JSONResponse({"error": "File not found"}, status_code=404)
+
 @app.get("/download/test-guide")
 async def download_test_guide_pdf():
     pdf_path = BASE_DIR / "ApplyCopilot_Test_Prompts_Guide.pdf"

@@ -55,7 +55,11 @@ const App = () => {
           {/* INITIAL SCREEN LAYER: ASK ANYTHING SEARCH BAR & HERO OVERLAY */}
           {!hasStarted && (
             <div className={`initial-hero-overlay ${isTransitioning ? "search-bar-fade-out" : ""}`}>
-              <Landing onPromptSubmit={handlePromptSubmit} isTransitioningOut={isTransitioning} />
+              <Landing
+                onPromptSubmit={handlePromptSubmit}
+                onEnterWorkspace={() => handlePromptSubmit("", "purple", null)}
+                isTransitioningOut={isTransitioning}
+              />
             </div>
           )}
 

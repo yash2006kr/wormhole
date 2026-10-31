@@ -18,7 +18,55 @@ interface ChatMessage {
   telemetry?: any;
   proofImage?: string;
   options?: string[];
+  downloadUrl?: string;
+  downloadFilename?: string;
 }
+
+const renderFormattedMessage = (text: string) => {
+  if (!text) return "";
+  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  const elements: (string | JSX.Element)[] = [];
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = linkRegex.exec(text)) !== null) {
+    if (match.index > lastIdx) {
+      elements.push(text.slice(lastIdx, match.index));
+    }
+    const label = match[1];
+    const url = match[2];
+    const isDl = url.startsWith("/download/") || url.startsWith("/downloads/") || url.includes("/download");
+    const filename = url.split("/").pop() || "download";
+
+    elements.push(
+      <a
+        key={match.index}
+        href={url}
+        download={isDl ? filename : undefined}
+        target={isDl ? undefined : "_blank"}
+        rel="noopener noreferrer"
+        style={{
+          color: "#38bdf8",
+          textDecoration: "underline",
+          fontWeight: 700,
+          backgroundColor: isDl ? "rgba(56, 189, 248, 0.15)" : "transparent",
+          padding: isDl ? "2px 8px" : "0",
+          borderRadius: isDl ? "6px" : "0",
+          border: isDl ? "1px solid rgba(56, 189, 248, 0.4)" : "none",
+        }}
+      >
+        {label}
+      </a>
+    );
+    lastIdx = match.index + match[0].length;
+  }
+
+  if (lastIdx < text.length) {
+    elements.push(text.slice(lastIdx));
+  }
+
+  return elements.length > 0 ? elements : text;
+};
 
 interface AgentWorkspaceProps {
   initialPrompt?: string;
@@ -281,6 +329,8 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                       ...last,
                       text: data.text,
                       options: chatOptions.length > 0 ? chatOptions : last.options,
+                      downloadUrl: data.download_url || last.downloadUrl,
+                      downloadFilename: data.filename || last.downloadFilename,
                     },
                   ];
                 }
@@ -292,6 +342,8 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                     text: data.text,
                     timestamp: now,
                     options: chatOptions,
+                    downloadUrl: data.download_url,
+                    downloadFilename: data.filename,
                   },
                 ];
               });
@@ -806,7 +858,58 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
                   )}
 
                   {/* Text Message Content */}
-                  <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{m.text}</div>
+                  <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                    {renderFormattedMessage(m.text)}
+                  </div>
+
+                  {/* Interactive ChatGPT-Style Download Card Button */}
+                  {(() => {
+                    let dUrl = m.downloadUrl;
+                    let dName = m.downloadFilename;
+                    if (!dUrl && m.text) {
+                      const mMatch = m.text.match(/\/download\/[^\s\)]+/);
+                      if (mMatch) {
+                        dUrl = mMatch[0];
+                        dName = dUrl.split("/").pop();
+                      }
+                    }
+                    if (!dUrl) return null;
+
+                    return (
+                      <div style={{ marginTop: "12px", marginBottom: "6px" }}>
+                        <a
+                          href={dUrl}
+                          download={dName || true}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "12px",
+                            padding: "12px 18px",
+                            background: "linear-gradient(135deg, rgba(34, 197, 94, 0.18), rgba(56, 189, 248, 0.22))",
+                            border: "1px solid rgba(56, 189, 248, 0.55)",
+                            borderRadius: "12px",
+                            color: "#f8fafc",
+                            textDecoration: "none",
+                            fontWeight: 600,
+                            fontSize: "13px",
+                            boxShadow: "0 6px 20px rgba(0, 0, 0, 0.4)",
+                            cursor: "pointer",
+                            transition: "all 0.2s ease"
+                          }}
+                          className="wh-download-card-btn"
+                        >
+                          <span style={{ fontSize: "20px" }}>📥</span>
+                          <div style={{ display: "flex", flexDirection: "column", textAlign: "left" }}>
+                            <span style={{ color: "#38bdf8", fontWeight: 700 }}>Download {dName || "Compressed File"}</span>
+                            <span style={{ fontSize: "11px", color: "#94a3b8" }}>Click to save directly to your device</span>
+                          </div>
+                          <span style={{ marginLeft: "10px", fontSize: "11px", background: "rgba(56, 189, 248, 0.25)", padding: "4px 8px", borderRadius: "6px", color: "#7dd3fc" }}>
+                            Ready ⬇
+                          </span>
+                        </a>
+                      </div>
+                    );
+                  })()}
 
                   {/* Proof Image if provided */}
                   {m.proofImage && (
