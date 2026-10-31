@@ -121,25 +121,26 @@ class SemanticIntentAnalyzer:
         if any(term in p_lower for term in cls.FOOD_TERMS) and not ("swiggy" in url_lower or "zomato" in url_lower):
             return False
 
-        # General questions and search verbs are searches, not in-page controls
-        if any(p_lower.startswith(q) for q in ["who is", "what is", "where is", "how to", "tell me about", "search", "find", "google", "browse", "look up"]):
-            return False
-
         # Transit route searches are never in-page controls
         if cls.parse_transit_route(prompt):
             return False
 
+        # Check site-specific in-page controls FIRST so "Search Specific Song" on YouTube is not treated as a search
         # Suno AI studio controls
         if "suno.com" in url_lower or "suno.ai" in url_lower:
             return any(k in p_lower for k in ["create", "generate", "play", "pause", "instrumental", "lyrics", "prompt", "song", "track"])
 
-        # YouTube media controls
+        # YouTube media controls & searches
         if "youtube.com" in url_lower:
-            return any(k in p_lower for k in ["play", "pause", "next", "fullscreen", "mute", "unmute", "volume", "theater", "skip", "queue", "search specific song", "search song"])
+            return any(k in p_lower for k in ["play", "pause", "next", "fullscreen", "mute", "unmute", "volume", "theater", "skip", "queue", "search specific song", "search song", "search"])
 
         # AbhiBus / redBus filters
         if "abhibus.com" in url_lower or "redbus.in" in url_lower:
             return any(k in p_lower for k in ["sleeper", "seater", "ac", "non-ac", "fare", "price", "cheapest", "rating", "filter", "sort"])
+
+        # General questions and search verbs are searches, not in-page controls
+        if any(p_lower.startswith(q) for q in ["who is", "what is", "where is", "how to", "tell me about", "google", "browse", "look up"]):
+            return False
 
         # Short UI verbs
         words = p_lower.split()
@@ -1230,29 +1231,28 @@ class AgentCore:
             target_initial_url = f"https://www.{m.group(1)}"
 
         # C. Explicit site opening commands ("open abhibus", "go to youtube", "visit amazon")
-        elif re.search(r'\b(?:open|visit|go to|launch)\s+([a-zA-Z0-9-]+)\b', clean_g_lower):
-            site_cand = re.search(r'\b(?:open|visit|go to|launch)\s+([a-zA-Z0-9-]+)\b', clean_g_lower).group(1)
-            if site_cand not in ["the", "a", "an", "browser", "tab", "page", "window", "link", "google", "search", "create", "prompt", "song", "lyrics", "editor", "studio"]:
-                if site_cand == "abhibus":
-                    target_initial_url = "https://www.abhibus.com"
-                elif site_cand == "redbus":
-                    target_initial_url = "https://www.redbus.in"
-                elif site_cand in ["suno", "sunoai"]:
-                    target_initial_url = "https://suno.com"
-                elif site_cand == "youtube":
-                    target_initial_url = "https://www.youtube.com"
-                elif site_cand == "amazon":
-                    target_initial_url = "https://www.amazon.in"
-                elif site_cand == "flipkart":
-                    target_initial_url = "https://www.flipkart.com"
-                elif site_cand == "swiggy":
-                    target_initial_url = "https://www.swiggy.com"
-                elif site_cand == "zomato":
-                    target_initial_url = "https://www.zomato.com"
-                elif site_cand == "wikipedia":
-                    target_initial_url = "https://www.wikipedia.org"
-                else:
-                    target_initial_url = f"https://www.{site_cand}.com"
+        elif (m_site := re.search(r'\b(?:open|visit|go to|launch)\s+(?!the\b|a\b|an\b|browser\b|tab\b|page\b|window\b|link\b|google\b|search\b|create\b|prompt\b|song\b|lyrics\b|editor\b|studio\b)([a-zA-Z0-9-]+)\b', clean_g_lower)):
+            site_cand = m_site.group(1)
+            if site_cand == "abhibus":
+                target_initial_url = "https://www.abhibus.com"
+            elif site_cand == "redbus":
+                target_initial_url = "https://www.redbus.in"
+            elif site_cand in ["suno", "sunoai"]:
+                target_initial_url = "https://suno.com"
+            elif site_cand == "youtube":
+                target_initial_url = "https://www.youtube.com"
+            elif site_cand == "amazon":
+                target_initial_url = "https://www.amazon.in"
+            elif site_cand == "flipkart":
+                target_initial_url = "https://www.flipkart.com"
+            elif site_cand == "swiggy":
+                target_initial_url = "https://www.swiggy.com"
+            elif site_cand == "zomato":
+                target_initial_url = "https://www.zomato.com"
+            elif site_cand == "wikipedia":
+                target_initial_url = "https://www.wikipedia.org"
+            else:
+                target_initial_url = f"https://www.{site_cand}.com"
 
         # D. Known sites and popular brand keywords IF NOT ALREADY ON THAT SITE
         elif "abhibus" in clean_g_lower and "abhibus" not in curr_host:
