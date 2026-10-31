@@ -603,15 +603,30 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
 
   const handleCloseTab = async (e: React.MouseEvent, index: number) => {
     e.stopPropagation();
+    e.preventDefault();
     try {
       await fetch("/api/tabs/close", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ index }),
       });
-      refreshTabs();
+      setTimeout(refreshTabs, 150);
     } catch (e) {
       console.error("Close tab error:", e);
+    }
+  };
+
+  const handleClearTabs = async (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    e?.preventDefault();
+    try {
+      await fetch("/api/tabs/clear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      setTimeout(refreshTabs, 150);
+    } catch (e) {
+      console.error("Clear tabs error:", e);
     }
   };
 
@@ -934,6 +949,15 @@ export const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({
             <button className="wh-tab-add" onClick={handleOpenTab} title="Open New Tab">
               +
             </button>
+            {tabs.length > 1 && (
+              <button
+                className="wh-tab-clear"
+                onClick={handleClearTabs}
+                title="Clear all background tabs"
+              >
+                ✕ Clear Tabs
+              </button>
+            )}
           </div>
 
           {/* Browser Toolbar */}

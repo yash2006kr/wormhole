@@ -520,6 +520,13 @@ async def close_browser_tab(req: Request):
     curr_idx = next((t["index"] for t in tabs if t["active"]), 0)
     return JSONResponse({"status": "SUCCESS", "tabs": tabs, "active_index": curr_idx})
 
+@app.post("/api/tabs/clear")
+async def clear_browser_tabs(req: Request):
+    await agent_core.clear_other_tabs()
+    tabs = await agent_core.get_tabs_info()
+    curr_idx = next((t["index"] for t in tabs if t["active"]), 0)
+    return JSONResponse({"status": "SUCCESS", "tabs": tabs, "active_index": curr_idx})
+
 # ==============================================================================
 # AGENTIC EXECUTION API
 # ==============================================================================
@@ -619,8 +626,8 @@ async def execute_agent_command(req: Request):
 
         p_lower = prompt.lower()
 
-        # Explicit Mock Benchmark 1: Document Exorcist & Photo Compression
-        if any(k in p_lower for k in ["compress", "photo compressor", "image compressor", "heal photo", "fix passport", "passport photo", "document exorcist"]):
+        # Explicit Mock Benchmark 1: Document Exorcist Mock Benchmark Test (Only for explicit benchmark/demo commands)
+        if any(k in p_lower for k in ["mock compress", "test exorcist", "benchmark exorcist", "demo photo heal", "mock photo compressor", "test passport photo", "benchmark compress"]):
             input_test_file = BASE_DIR / "test_oversized_photo.jpg"
             if attached_files and Path(attached_files[0].get("path", "")).exists():
                 input_test_file = Path(attached_files[0]["path"])

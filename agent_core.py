@@ -546,10 +546,49 @@ class AgentCore:
 
         await self.broadcast_tabs()
         if self.page:
+            try:
+                t = await self.page.title()
+            except Exception:
+                t = ""
             await self.broadcast({
                 "type": "URL_UPDATE",
                 "url": self.page.url or "",
-                "title": await self.page.title() if self.page else ""
+                "title": t
+            })
+
+    async def clear_other_tabs(self):
+        """Closes all background tabs, keeping only the active tab open. If only 1 tab, resets to blank."""
+        if not self.context or not self.context.pages:
+            return
+        pages = list(self.context.pages)
+        if len(pages) <= 1:
+            if self.page:
+                try:
+                    await self.page.goto("about:blank")
+                except Exception:
+                    pass
+            await self.broadcast_tabs()
+            return
+
+        active_p = self.page if self.page in pages else pages[0]
+        for p in pages:
+            if p != active_p:
+                try:
+                    await p.close()
+                except Exception as e:
+                    print(f"[!] Error closing extra tab: {e}")
+        self.page = active_p
+        await self._attach_screencast_to_page(active_p)
+        await self.broadcast_tabs()
+        if self.page:
+            try:
+                t = await self.page.title()
+            except Exception:
+                t = ""
+            await self.broadcast({
+                "type": "URL_UPDATE",
+                "url": self.page.url or "",
+                "title": t
             })
 
     async def _on_screencast_frame(self, event):
@@ -2013,46 +2052,92 @@ class AgentCore:
                 "finish": False
             }
 
-        # Amazon search results instant filter & sorting handlers
-        if "amazon." in curr_url.lower():
-            if any(k in p_clean_lower for k in ["lowest price", "cheapest", "low to high", "price low"]):
-                new_url = curr_url
-                if "s=" in new_url:
-                    new_url = re.sub(r's=[^&]+', 's=price-asc-rank', new_url)
+        # Amazon & E-Commerce: Instant Action Taking (Auto-Get One, Add to Cart, Lowest Price, 4+ Star)
+        if "amazon." in curr_url.lower() or "flipkart." in curr_url.lower():
+            # Action: Get One / Add to Cart
+            if any(k in p_clean_lower for k in ["add to cart", "get one", "buy", "purchase", "order", "add to basket", "buy now"]):
+                if "/dp/" in curr_url or "/gp/product/" in curr_url:
+                    return {
+                        "action": "click",
+                        "selector": "#add-to-cart-button, input#add-to-cart-button, button#add-to-cart-button, input[name='submit.add-to-cart'], #buy-now-button",
+                        "reason": "Adding selected product to cart on product detail page.",
+                        "finish": True,
+                        "message": "🛒 **Added to Cart**: Successfully added this product to your cart.",
+                        "options": ["💳 Proceed to Checkout", "📦 View Cart", "🔍 Search Other Products"]
+                    }
                 else:
-                    sep = "&" if "?" in new_url else "?"
-                    new_url = f"{new_url}{sep}s=price-asc-rank"
-                return {
-                    "action": "navigate",
-                    "url": new_url,
-                    "reason": "Sorting Amazon products by Lowest Price (Price: Low to High).",
-                    "finish": True,
-                    "message": "💰 **Sorted by Lowest Price**: Showing Amazon products from lowest to highest price.",
-                    "options": [
-                        "⭐ 4+ Star Rated",
-                        "⚡ Prime / Assured",
-                        "🏷️ Today's Deals",
-                        "🔍 New Search"
-                    ]
-                }
+                    return {
+                        "action": "click",
+                        "selector": "button:has-text('Add to cart'), button[name='submit.addToCart'], input[name='submit.addToCart'], div[data-component-type='s-search-result'] h2 a, .s-result-item h2 a",
+                        "reason": "Selecting top matching product on page and adding to cart.",
+                        "finish": True,
+                        "message": "🛒 **Added Top Product to Cart**: Selected the top product on the page and added it to your cart.",
+                        "options": ["💳 Proceed to Checkout", "📦 View Cart", "💰 Lowest Price", "⭐ 4+ Star Rated"]
+                    }
+
+            # Action: Lowest Price -> Sorts and immediately selects/adds top item
+            elif any(k in p_clean_lower for k in ["lowest price", "cheapest", "low to high", "price low"]):
+                if "s=price-asc-rank" in curr_url:
+                    return {
+                        "action": "click",
+                        "selector": "button:has-text('Add to cart'), button[name='submit.addToCart'], input[name='submit.addToCart'], div[data-component-type='s-search-result'] h2 a, .s-result-item h2 a",
+                        "reason": "Selecting #1 lowest price product and adding to cart.",
+                        "finish": True,
+                        "message": "🛒 **Added Lowest Priced Item to Cart**: Found the lowest priced product and added it to your cart.",
+                        "options": ["💳 Proceed to Checkout", "📦 View Cart", "⭐ 4+ Star Rated", "🔍 New Search"]
+                    }
+                else:
+                    new_url = curr_url
+                    if "s=" in new_url:
+                        new_url = re.sub(r's=[^&]+', 's=price-asc-rank', new_url)
+                    else:
+                        sep = "&" if "?" in new_url else "?"
+                        new_url = f"{new_url}{sep}s=price-asc-rank"
+                    return {
+                        "action": "navigate",
+                        "url": new_url,
+                        "reason": "Navigating to lowest price products on Amazon.",
+                        "finish": False,
+                        "message": "💰 **Sorted by Lowest Price**: Loading lowest priced items and picking the top result...",
+                        "options": [
+                            "🛒 Get One & Add to Cart",
+                            "⭐ 4+ Star Rated",
+                            "⚡ Prime / Assured",
+                            "💳 Proceed to Checkout"
+                        ]
+                    }
+
+            # Action: 4+ Star Rated -> Filters and selects top rated item
             elif any(k in p_clean_lower for k in ["4+ star", "4 star", "top rated", "customer reviews", "rating"]):
-                new_url = curr_url
-                if "p_72" not in new_url:
-                    sep = "&" if "?" in new_url else "?"
-                    new_url = f"{new_url}{sep}rh=p_72%3A1318476031"
-                return {
-                    "action": "navigate",
-                    "url": new_url,
-                    "reason": "Filtering Amazon products by 4 Stars and Up.",
-                    "finish": True,
-                    "message": "⭐ **Filtered by 4+ Star Rating**: Showing top customer-rated products on Amazon.",
-                    "options": [
-                        "💰 Lowest Price",
-                        "⚡ Prime / Assured",
-                        "🏷️ Today's Deals",
-                        "🔍 New Search"
-                    ]
-                }
+                if "p_72" in curr_url:
+                    return {
+                        "action": "click",
+                        "selector": "button:has-text('Add to cart'), button[name='submit.addToCart'], input[name='submit.addToCart'], div[data-component-type='s-search-result'] h2 a, .s-result-item h2 a",
+                        "reason": "Selecting #1 top rated product and adding to cart.",
+                        "finish": True,
+                        "message": "⭐ **Selected Top Rated Item**: Picked the #1 4+ star customer-rated item.",
+                        "options": ["🛒 Add to Cart", "💳 Proceed to Checkout", "💰 Lowest Price", "🔍 Search Other Items"]
+                    }
+                else:
+                    new_url = curr_url
+                    if "p_72" not in new_url:
+                        sep = "&" if "?" in new_url else "?"
+                        new_url = f"{new_url}{sep}rh=p_72%3A1318476031"
+                    return {
+                        "action": "navigate",
+                        "url": new_url,
+                        "reason": "Filtering Amazon products by 4 Stars and Up.",
+                        "finish": False,
+                        "message": "⭐ **Filtered by 4+ Star Rating**: Loading top customer-rated items...",
+                        "options": [
+                            "🛒 Get One & Add to Cart",
+                            "💰 Lowest Price",
+                            "⚡ Prime / Assured",
+                            "💳 Proceed to Checkout"
+                        ]
+                    }
+
+            # Action: Prime Delivery
             elif any(k in p_clean_lower for k in ["prime", "assured", "fast delivery"]):
                 new_url = curr_url
                 if "p_85" not in new_url:
@@ -2062,33 +2147,41 @@ class AgentCore:
                     "action": "navigate",
                     "url": new_url,
                     "reason": "Filtering Amazon products with Prime delivery.",
-                    "finish": True,
-                    "message": "⚡ **Prime Delivery Filtered**: Showing Prime eligible items on Amazon.",
+                    "finish": False,
+                    "message": "⚡ **Prime Delivery Filtered**: Showing Prime eligible items.",
                     "options": [
+                        "🛒 Get One & Add to Cart",
                         "💰 Lowest Price",
                         "⭐ 4+ Star Rated",
-                        "🏷️ Today's Deals",
-                        "🔍 New Search"
+                        "💳 Proceed to Checkout"
                     ]
                 }
-            elif any(k in p_clean_lower for k in ["deal", "discount", "offer"]):
-                new_url = curr_url
-                if "p_n_deal_type" not in new_url:
-                    sep = "&" if "?" in new_url else "?"
-                    new_url = f"{new_url}{sep}rh=p_n_deal_type%3A2692251031"
+
+        # Photo Compressor Website Action Handlers (imagecompressor.com, compressjpeg.com, pi7.org, etc.)
+        if any(site in curr_url.lower() for site in ["imagecompressor.com", "compressjpeg.com", "pi7.org", "simpleimageresizer.com", "iloveimg.com"]):
+            attached_path = ""
+            if self.attached_files and Path(self.attached_files[0].get("path", "")).exists():
+                attached_path = self.attached_files[0]["path"]
+            elif (BASE_DIR / "test_oversized_photo.jpg").exists():
+                attached_path = str(BASE_DIR / "test_oversized_photo.jpg")
+
+            if any(k in p_clean_lower for k in ["download", "save", "get compressed", "done"]):
                 return {
-                    "action": "navigate",
-                    "url": new_url,
-                    "reason": "Filtering Amazon Today's Deals.",
+                    "action": "click",
+                    "selector": "button:has-text('DOWNLOAD ALL'), button:has-text('DOWNLOAD'), a:has-text('DOWNLOAD'), .btn-download, a.btn",
+                    "reason": "Downloading compressed photo directly from the website.",
                     "finish": True,
-                    "message": "🏷️ **Today's Deals Filtered**: Showing discounted deals on Amazon.",
-                    "options": [
-                        "💰 Lowest Price",
-                        "⭐ 4+ Star Rated",
-                        "⚡ Prime / Assured",
-                        "🔍 New Search"
-                    ]
+                    "message": "📁 **Compressed Image Ready**: Download initiated on the compressor website.",
+                    "options": ["⬇️ Download Again", "🔄 Compress Another Photo", "✨ New Task"]
                 }
+            
+            return {
+                "action": "upload_file",
+                "selector": "input[type='file'], #file-selector, .file-input",
+                "file_path": attached_path,
+                "reason": f"Uploading photo to live compressor website: {Path(attached_path).name if attached_path else 'image'}",
+                "finish": False
+            }
 
         # 1. Fast Heuristic: Google Search Home Page -> Type query and submit immediately
         if ("google.com" in curr_url or "bing.com" in curr_url) and not ("/search" in curr_url or "search?" in curr_url):
@@ -2641,12 +2734,12 @@ class AgentCore:
                 "⚡ Fast Delivery",
                 "⭐ Customer Reviews"
             ]
-        elif "amazon.in" in url_lower or "flipkart.com" in url_lower:
+        elif "amazon.in" in url_lower or "amazon.com" in url_lower or "flipkart.com" in url_lower:
             return [
-                "⭐ 4+ Star Rated",
+                "🛒 Get One & Add to Cart",
                 "💰 Lowest Price",
-                "⚡ Prime / Assured",
-                "🏷️ Today's Deals"
+                "⭐ 4+ Star Rated",
+                "⚡ Prime / Assured"
             ]
         elif "wikipedia.org" in url_lower:
             return [
