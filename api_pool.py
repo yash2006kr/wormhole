@@ -455,12 +455,7 @@ class MultiKeyAPIPool:
         if gemini_action:
             return gemini_action
 
-        # --- LEVEL 3: OPENROUTER FREE TIER ---
-        if self.openrouter.api_key:
-            print("[API POOL] [FAILOVER] Cascading to OpenRouter Free Tier...")
-            router_action = self.openrouter.execute(messages, max_tokens=max_tokens)
-            if router_action:
-                return router_action
+        # OpenRouter disabled per user request - using Groq & Gemini exclusively
 
         # --- LEVEL 4: CEREBRAS CLOUD ---
         if self.cerebras.api_key:

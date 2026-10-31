@@ -1284,20 +1284,22 @@ class AgentCore:
         elif any(k in clean_g_lower for k in ["mock emergency", "test emergency"]):
             target_initial_url = "http://localhost:8000/mock/emergency"
 
-                # F. Direct Transit Route Navigation (e.g. "Bangalore to Hyderabad")
-        route_check = SemanticIntentAnalyzer.parse_transit_route(clean_g_lower)
-        if route_check and ("abhibus" in curr_host or "abhibus" in clean_g_lower or "bus" in clean_g_lower):
-            orig, dst, _ = route_check
+        # F. Photo compressor tool
+        elif any(k in clean_g_lower for k in ["photo compressor", "image compressor", "compress photo", "compress the image", "compress image"]):
+            target_initial_url = "https://imagecompressor.com"
+
+        # G. Direct Transit Route Navigation (e.g. "Bangalore to Hyderabad")
+        elif SemanticIntentAnalyzer.parse_transit_route(clean_g_lower) and ("abhibus" in curr_host or "abhibus" in clean_g_lower or "bus" in clean_g_lower):
+            orig, dst, _ = SemanticIntentAnalyzer.parse_transit_route(clean_g_lower)
             target_initial_url = f"https://www.abhibus.com/bus-search?source={orig}&destination={dst}"
             print(f"[AGENT CORE] Direct transit route identified: {orig} -> {dst}")
 
-        # G. IN-PAGE FOLLOW-UP ACTION CHECK:
-        # Only preserve current page if the command is genuinely an in-page control for the active site
+        # H. IN-PAGE FOLLOW-UP ACTION CHECK:
         elif SemanticIntentAnalyzer.is_in_page_control(clean_g_lower, curr_page_url):
             target_initial_url = None
             print(f"[AGENT CORE] User is on active site '{curr_page_url}'. Preserving session context for in-page control: '{goal}'")
 
-        # H. General Search & Exploration query (Food, Knowledge, Directions, Services)
+        # I. General Search & Exploration query (Food, Knowledge, Directions, Services)
         else:
             search_q = goal.strip()
             for pfx in ["search for", "search", "google", "find", "look up", "tell me about", "who is", "what is", "browse"]:
@@ -2310,6 +2312,15 @@ class AgentCore:
 
         # 5. Fast Heuristic: Google Search Results Extraction with Clickable Options
         if ("google.com" in curr_url.lower() or "bing.com" in curr_url.lower()) and ("/search" in curr_url.lower() or "search?" in curr_url.lower()):
+            # If the user prompt is an ACTION task (e.g. go to site, fill form, compress, download), click the first result!
+            p_lower_task = clean_goal.lower()
+            if any(k in p_lower_task for k in ["go to", "navigate to", "fill", "compress", "download", "apply", "book", "contact"]):
+                return {
+                    "action": "click",
+                    "selector": "div#search a h3, div.g a h3, a h3, div#rso a",
+                    "reason": f"Clicking top search result to open target site for task: '{clean_goal[:40]}'",
+                    "finish": False
+                }
             try:
                 results = await self.page.evaluate("""() => {
                     const items = [];
